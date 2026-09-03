@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Main gradient: dark navy to deep blue-purple -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#1e3a8a"/>
+      <stop offset="50%"  stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <!-- Coin shine -->
+    <radialGradient id="coinGrad" cx="40%" cy="35%" r="60%">
+      <stop offset="0%"   stop-color="#fef08a"/>
+      <stop offset="60%"  stop-color="#eab308"/>
+      <stop offset="100%" stop-color="#a16207"/>
+    </radialGradient>
+    <!-- Subtle inner glow -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="roundedClip">
+      <rect width="512" height="512" rx="96" ry="96"/>
+    </clipPath>
+  </defs>
+
+  <!-- Rounded-square background -->
+  <rect width="512" height="512" rx="96" fill="url(#bgGrad)"/>
+
+  <!-- Subtle grid lines for depth -->
+  <g clip-path="url(#roundedClip)" opacity="0.06">
+    <line x1="0"   y1="128" x2="512" y2="128" stroke="white" stroke-width="1"/>
+    <line x1="0"   y1="256" x2="512" y2="256" stroke="white" stroke-width="1"/>
+    <line x1="0"   y1="384" x2="512" y2="384" stroke="white" stroke-width="1"/>
+    <line x1="128" y1="0"   x2="128" y2="512" stroke="white" stroke-width="1"/>
+    <line x1="256" y1="0"   x2="256" y2="512" stroke="white" stroke-width="1"/>
+    <line x1="384" y1="0"   x2="384" y2="512" stroke="white" stroke-width="1"/>
+  </g>
+
+  <!-- Coin circle (outer ring) -->
+  <circle cx="256" cy="234" r="148" fill="url(#coinGrad)" filter="url(#glow)"/>
+
+  <!-- Coin inner ring -->
+  <circle cx="256" cy="234" r="124" fill="none" stroke="#fef08a" stroke-width="6" opacity="0.5"/>
+
+  <!-- Dollar sign -->
+  <text
+    x="256" y="298"
+    font-family="'Arial Black', 'Arial', sans-serif"
+    font-size="172"
+    font-weight="900"
+    fill="#0f172a"
+    text-anchor="middle"
+    dominant-baseline="auto"
+    letter-spacing="-4"
+  >$</text>
+
+  <!-- Bottom bar: "AI" chip label -->
+  <rect x="152" y="418" width="208" height="44" rx="22" fill="white" opacity="0.15"/>
+  <rect x="154" y="420" width="204" height="40" rx="20" fill="none" stroke="white" stroke-width="1.5" opacity="0.4"/>
+  <text
+    x="256" y="447"
+    font-family="'Arial', sans-serif"
+    font-size="20"
+    font-weight="700"
+    fill="white"
+    text-anchor="middle"
+    letter-spacing="3"
+    opacity="0.95"
+  >AI FINANCE</text>
+
+  <!-- Top-right sparkle dot (AI indicator) -->
+  <circle cx="372" cy="112" r="14" fill="#34d399" opacity="0.9"/>
+  <circle cx="372" cy="112" r="8"  fill="white"   opacity="0.95"/>
+</svg>
