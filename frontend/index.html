@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- ── Viewport ──────────────────────────────────────────────────────── -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- ── Page Title ────────────────────────────────────────────────────── -->
+    <title>Money Manager AI</title>
+    <meta name="description" content="AI-powered personal finance manager — track expenses, get smart recommendations, predict overspending risk." />
+
+    <!-- ── Theme & Colors ────────────────────────────────────────────────── -->
+    <!-- theme-color controls the browser chrome on Android/Chrome (status bar) -->
+    <meta name="theme-color" content="#0f172a" />
+    <!-- media-query variants for light / dark OS mode -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#1d4ed8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)"  content="#0f172a" />
+
+    <!-- ── PWA Manifest (injected by vite-plugin-pwa at build time) ──────── -->
+    <!-- vite-plugin-pwa automatically injects <link rel="manifest"> here.   -->
+    <!-- The tag below is a fallback for dev mode before the plugin injects. -->
+
+    <!-- ── Standard Favicon ──────────────────────────────────────────────── -->
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+
+    <!-- ── Apple / iOS PWA Meta Tags ─────────────────────────────────────── -->
+    <!-- Enables standalone (full-screen) mode when launched from home screen -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- black-translucent: the app content extends behind the status bar     -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MoneyManager" />
+    <!-- Apple requires its own touch icon separate from the manifest         -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Sizes variants (optional but improves quality on all retina screens) -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
+
+    <!-- ── Apple Splash Screens (optional — remove if startup performance    -->
+    <!-- is more important than a polished splash on iOS)                    -->
+    <!-- Generate these from https://progressier.com/pwa-screenshots          -->
+
+    <!-- ── Microsoft / Windows PWA ──────────────────────────────────────── -->
+    <meta name="msapplication-TileColor" content="#0f172a" />
+    <meta name="msapplication-TileImage" content="/icon-192.png" />
+
+    <!-- ── Open Graph (share preview) ───────────────────────────────────── -->
+    <meta property="og:type"        content="website" />
+    <meta property="og:title"       content="Money Manager AI" />
+    <meta property="og:description" content="AI-powered personal finance tracker with ML overspending prediction." />
+    <meta property="og:image"       content="/icon-512.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
