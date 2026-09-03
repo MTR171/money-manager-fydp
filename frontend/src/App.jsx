@@ -12,12 +12,164 @@ import AIRecommendations from './components/AIRecommendations';
 import InstallBanner from './components/InstallBanner';
 import OfflineBar from './components/OfflineBar';
 
-// --- Auth Pages ---
-const AuthPage = ({ onLogin }) => {
-  const [mode, setMode] = useState('login');
-  const [form, setForm] = useState({ email: '', password: '', full_name: '' });
+// ── Forgot Password Modal ─────────────────────────────────────────────────────
+const ForgotPasswordModal = ({ onClose }) => {
+  const [step, setStep]       = useState('form');   // 'form' | 'success'
+  const [form, setForm]       = useState({ email: '', new_password: '', confirm: '' });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError]     = useState('');
+
+  const handleChange = (e) => {
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    setError('');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (form.new_password !== form.confirm) {
+      setError('Passwords do not match.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      await authAPI.forgotPassword({ email: form.email, new_password: form.new_password });
+      setStep('success');
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Reset failed. Please check your email and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-5 flex items-center justify-between">
+          <div>
+            <p className="text-white font-bold text-base">Reset Password</p>
+            <p className="text-blue-200 text-xs mt-0.5">
+              {step === 'form' ? 'Enter your email and choose a new password' : 'All done!'}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-white/20 rounded-lg transition-colors"
+          >
+            <X size={16} className="text-white" />
+          </button>
+        </div>
+
+        <div className="px-6 py-6">
+          {step === 'success' ? (
+            /* ── Success state ─────────────────────────────────────────── */
+            <div className="text-center py-4">
+              <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-7 h-7 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-gray-900 font-bold text-lg mb-1">Password Updated!</h3>
+              <p className="text-gray-500 text-sm mb-6">
+                Your password has been reset. You can now sign in with your new password.
+              </p>
+              <button
+                onClick={onClose}
+                className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold text-sm active:scale-[0.98] transition-transform"
+              >
+                Back to Sign In
+              </button>
+            </div>
+          ) : (
+            /* ── Form state ────────────────────────────────────────────── */
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Registered Email
+                </label>
+                <input
+                  type="email" name="email" value={form.email} onChange={handleChange}
+                  placeholder="you@example.com" required autoComplete="email"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  New Password
+                </label>
+                <input
+                  type="password" name="new_password" value={form.new_password} onChange={handleChange}
+                  placeholder="Min. 6 characters" required minLength={6} autoComplete="new-password"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password" name="confirm" value={form.confirm} onChange={handleChange}
+                  placeholder="Re-enter new password" required minLength={6} autoComplete="new-password"
+                  className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${
+                    form.confirm && form.confirm !== form.new_password
+                      ? 'border-red-300 bg-red-50'
+                      : 'border-gray-200'
+                  }`}
+                />
+                {form.confirm && form.confirm !== form.new_password && (
+                  <p className="text-red-500 text-xs mt-1">Passwords don't match</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || (form.confirm && form.confirm !== form.new_password)}
+                className={`w-full py-3 rounded-xl font-bold text-white text-sm transition-all ${
+                  loading || (form.confirm && form.confirm !== form.new_password)
+                    ? 'bg-gray-300 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:scale-[0.98]'
+                }`}
+              >
+                {loading ? 'Resetting…' : 'Reset Password'}
+              </button>
+
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Auth Page ─────────────────────────────────────────────────────────────────
+const AuthPage = ({ onLogin }) => {
+  const [mode, setMode]               = useState('login');
+  const [form, setForm]               = useState({ email: '', password: '', full_name: '' });
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState('');
+  const [showForgot, setShowForgot]   = useState(false);
 
   const handleChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -100,7 +252,19 @@ const AuthPage = ({ onLogin }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+              {/* Password label row — "Forgot password?" sits on the right */}
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium text-gray-700">Password</label>
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowForgot(true)}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                )}
+              </div>
               <input
                 type="password" name="password" value={form.password} onChange={handleChange}
                 placeholder="••••••••" required minLength={6}
@@ -125,9 +289,13 @@ const AuthPage = ({ onLogin }) => {
           )}
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgot && <ForgotPasswordModal onClose={() => setShowForgot(false)} />}
     </div>
   );
 };
+
 
 // --- Profile Modal ---
 const ProfileModal = ({ isOpen, onClose, user, onUpdate }) => {

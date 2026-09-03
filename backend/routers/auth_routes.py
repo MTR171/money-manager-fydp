@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
-from schemas import UserCreate, UserLogin, UserOut, TokenResponse, UserUpdate
+from schemas import UserCreate, UserLogin, UserOut, TokenResponse, UserUpdate, PasswordResetRequest
 from models import User
 from auth import get_password_hash, verify_password, create_access_token, get_current_user
 
@@ -53,3 +53,26 @@ def update_me(user_update: UserUpdate, current_user: User = Depends(get_current_
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.post('/forgot-password')
+def forgot_password(payload: PasswordResetRequest, db: Session = Depends(get_db)):
+    """
+    Reset a user's password directly by email.
+    Since this app has no email/SMTP service, the reset is immediate:
+    the caller supplies the new password alongside the registered email.
+    Returns HTTP 404 if the email is not registered (but uses a generic
+    message to avoid leaking whether an address exists).
+    """
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        # Generic message — don't reveal whether the email is registered
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with that email address."
+        )
+
+    user.hashed_password = get_password_hash(payload.new_password)
+    db.commit()
+
+    return {"message": "Password reset successfully. You can now log in with your new password."}

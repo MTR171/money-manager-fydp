@@ -58,10 +58,11 @@ apiClient.interceptors.response.use(
 
 // ── Auth API ──────────────────────────────────────────────────────────────────
 export const authAPI = {
-  register: (data) => apiClient.post('/api/auth/register', data),
-  login:    (data) => apiClient.post('/api/auth/login', data),
-  getMe:    ()     => apiClient.get('/api/auth/me'),
-  updateMe: (data) => apiClient.put('/api/auth/me', data),
+  register:       (data) => apiClient.post('/api/auth/register', data),
+  login:          (data) => apiClient.post('/api/auth/login', data),
+  getMe:          ()     => apiClient.get('/api/auth/me'),
+  updateMe:       (data) => apiClient.put('/api/auth/me', data),
+  forgotPassword: (data) => apiClient.post('/api/auth/forgot-password', data),
 };
 
 // ── Transactions API ──────────────────────────────────────────────────────────

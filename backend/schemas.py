@@ -12,6 +12,10 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    new_password: str = Field(min_length=6, description="New password (min 6 characters)")
+
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     monthly_income: Optional[float] = None
