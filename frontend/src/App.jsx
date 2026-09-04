@@ -16,6 +16,7 @@ import GoalsView from './components/GoalsView';
 import BudgetsView from './components/BudgetsView';
 import BillsView from './components/BillsView';
 import ReportsView from './components/ReportsView';
+import SettingsView from './components/SettingsView';
 
 // ── Forgot Password Modal ─────────────────────────────────────────────────────
 const ForgotPasswordModal = ({ onClose }) => {
@@ -582,73 +583,102 @@ export default function App() {
     { id: 'goals',        label: 'Goals',        icon: Target },
     { id: 'bills',        label: 'Bills',        icon: Receipt },
     { id: 'reports',      label: 'Reports',      icon: BarChart3 },
+    { id: 'settings',     label: 'Settings',     icon: Settings },
   ];
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ${
-        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } lg:translate-x-0 lg:static lg:flex lg:flex-col`}>
-        {/* Logo */}
-        <div className="flex items-center gap-3 p-6 border-b border-gray-100">
-          <div className="p-2.5 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
-            <DollarSign size={20} className="text-white" />
+    <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-100 transform transition-transform duration-300 flex flex-col ${
+      sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+    } lg:translate-x-0 lg:static`}>
+
+      {/* ── Logo ─────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-100">
+        <div className="p-2.5 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-sm">
+          <DollarSign size={18} className="text-white" />
+        </div>
+        <div>
+          <h1 className="font-bold text-gray-800 text-sm leading-tight tracking-tight">Money Manager</h1>
+          <p className="text-[11px] text-gray-400 mt-0.5">AI Finance Tracker</p>
+        </div>
+      </div>
+
+      {/* ── Main nav ─────────────────────────────────────────────────── */}
+      <nav className="flex-1 px-3 pt-4 pb-2 space-y-0.5 overflow-y-auto">
+        {navItems.slice(0, -1).map(item => {
+          const Icon = item.icon;
+          const active = activeView === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => { setActiveView(item.id); setSidebarOpen(false); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group relative ${
+                active
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+              }`}
+            >
+              {/* active left bar */}
+              {active && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-blue-600 rounded-r-full" />
+              )}
+              <Icon
+                size={17}
+                className={active ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}
+              />
+              {item.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* ── Bottom: Settings + Logout + user chip ────────────────────── */}
+      <div className="px-3 pb-4 pt-2 border-t border-gray-100 space-y-0.5">
+        {/* Settings nav item (last in navItems) */}
+        {(() => {
+          const item = navItems[navItems.length - 1]; // 'settings'
+          const Icon = item.icon;
+          const active = activeView === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => { setActiveView(item.id); setSidebarOpen(false); }}
+              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group relative ${
+                active
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+              }`}
+            >
+              {active && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-blue-600 rounded-r-full" />
+              )}
+              <Icon size={17} className={active ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'} />
+              {item.label}
+            </button>
+          );
+        })()}
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 transition-colors"
+        >
+          <LogOut size={17} />
+          Logout
+        </button>
+
+        {/* User chip */}
+        <div className="flex items-center gap-3 px-3 pt-2 mt-1 border-t border-gray-100">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+            <span className="text-white text-xs font-bold">{user.full_name?.[0]?.toUpperCase() || 'U'}</span>
           </div>
-          <div>
-            <h1 className="font-bold text-gray-800 text-sm leading-tight">Money Manager</h1>
-            <p className="text-xs text-gray-400">AI Finance Tracker</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-800 truncate">{user.full_name || 'User'}</p>
+            <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
           </div>
         </div>
-
-        {/* Nav */}
-        <nav className="flex-1 p-4 space-y-1">
-          {navItems.map(item => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => { setActiveView(item.id); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                  activeView === item.id
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                <Icon size={18} />
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* User section */}
-        <div className="p-4 border-t border-gray-100 space-y-2">
-          <button
-            onClick={() => setShowProfileModal(true)}
-            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-100 transition-colors"
-          >
-            <Settings size={16} />
-            Settings
-          </button>
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-red-500 hover:bg-red-50 transition-colors"
-          >
-            <LogOut size={16} />
-            Logout
-          </button>
-          <div className="flex items-center gap-3 px-2 pt-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <span className="text-white text-xs font-bold">{user.full_name?.[0]?.toUpperCase() || 'U'}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">{user.full_name || 'User'}</p>
-              <p className="text-xs text-gray-400 truncate">{user.email}</p>
-            </div>
-          </div>
-        </div>
-      </aside>
+      </div>
+    </aside>
 
       {/* Sidebar overlay for mobile */}
       {sidebarOpen && (
@@ -743,6 +773,13 @@ export default function App() {
 
           {activeView === 'reports' && (
             <ReportsView currency={user.currency || 'BDT'} />
+          )}
+
+          {activeView === 'settings' && (
+            <SettingsView
+              user={user}
+              onUpdate={(updated) => { setUser(updated); }}
+            />
           )}
         </main>
       </div>
