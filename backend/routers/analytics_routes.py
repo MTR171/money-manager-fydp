@@ -365,6 +365,11 @@ def get_dashboard_summary(
         Transaction.user_id == current_user.id
     ).order_by(Transaction.date.desc()).all()
 
+    # Dynamic Net Balance: strictly sum(all income transactions) - sum(all expense transactions)
+    all_income = sum(t.amount for t in all_trans if t.type == 'income')
+    all_expense = sum(t.amount for t in all_trans if t.type == 'expense')
+    net_balance = all_income - all_expense
+
     monthly_trans = [
         t for t in all_trans
         if t.date.year == today.year and t.date.month == today.month
@@ -372,8 +377,7 @@ def get_dashboard_summary(
 
     total_expense = sum(t.amount for t in monthly_trans if t.type == 'expense')
     total_income = sum(t.amount for t in monthly_trans if t.type == 'income')
-    net_balance = total_income - total_expense
-    savings_rate = (net_balance / total_income * 100) if total_income > 0 else 0.0
+    savings_rate = ((total_income - total_expense) / total_income * 100) if total_income > 0 else 0.0
 
     income_ref = current_user.monthly_income if current_user.monthly_income > 0 else (
         total_income if total_income > 0 else 1.0

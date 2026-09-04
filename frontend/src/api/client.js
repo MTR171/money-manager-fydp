@@ -106,11 +106,12 @@ export const budgetsAPI = {
 };
 
 export const billsAPI = {
-  list:       ()     => apiClient.get('/api/bills/'),
-  create:     (data) => apiClient.post('/api/bills/', data),
+  list:       ()         => apiClient.get('/api/bills/'),
+  create:     (data)     => apiClient.post('/api/bills/', data),
   update:     (id, data) => apiClient.put(`/api/bills/${id}`, data),
-  togglePaid: (id)   => apiClient.patch(`/api/bills/${id}/toggle-paid`),
-  delete:     (id)   => apiClient.delete(`/api/bills/${id}`),
+  togglePaid: (id)       => apiClient.patch(`/api/bills/${id}/toggle-paid`),
+  pay:        (id)       => apiClient.post(`/api/bills/${id}/pay`),
+  delete:     (id)       => apiClient.delete(`/api/bills/${id}`),
 };
 
 export default apiClient;

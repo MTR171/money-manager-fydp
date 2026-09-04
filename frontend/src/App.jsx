@@ -670,11 +670,37 @@ export default function App() {
           )}
 
           {activeView === 'goals' && (
-            <GoalsView currency={user.currency || 'BDT'} />
+            <GoalsView
+              currency={user.currency || 'BDT'}
+              onGoalDeposit={() => {
+                fetchDashboard();
+                fetchTransactions();
+                fetchRecommendations();
+                showNotification('Goal funded! Deducted from Net Balance.');
+              }}
+              onSync={() => {
+                fetchDashboard();
+                fetchTransactions();
+                fetchRecommendations();
+              }}
+            />
           )}
 
           {activeView === 'bills' && (
-            <BillsView currency={user.currency || 'BDT'} />
+            <BillsView
+              currency={user.currency || 'BDT'}
+              onBillPaid={() => {
+                fetchDashboard();
+                fetchTransactions();
+                fetchRecommendations();
+                showNotification('Bill status updated! Net Balance & expenses synchronized.');
+              }}
+              onSync={() => {
+                fetchDashboard();
+                fetchTransactions();
+                fetchRecommendations();
+              }}
+            />
           )}
 
           {activeView === 'reports' && (

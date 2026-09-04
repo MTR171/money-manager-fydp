@@ -42,16 +42,18 @@ class TokenResponse(BaseModel):
 class TransactionCreate(BaseModel):
     amount: float = Field(gt=0)
     type: Literal['income', 'expense']
-    category: Literal['Food/Dining', 'Housing/Rent', 'Transport', 'Entertainment', 'Utilities', 'Healthcare', 'Shopping', 'Other']
+    category: str
     date: datetime
     note: Optional[str] = None
+    description: Optional[str] = None
 
 class TransactionUpdate(BaseModel):
     amount: Optional[float] = None
     type: Optional[Literal['income', 'expense']] = None
-    category: Optional[Literal['Food/Dining', 'Housing/Rent', 'Transport', 'Entertainment', 'Utilities', 'Healthcare', 'Shopping', 'Other']] = None
+    category: Optional[str] = None
     date: Optional[datetime] = None
     note: Optional[str] = None
+    description: Optional[str] = None
 
 class TransactionOut(BaseModel):
     id: int
@@ -60,7 +62,8 @@ class TransactionOut(BaseModel):
     type: str
     category: str
     date: datetime
-    note: Optional[str]
+    note: Optional[str] = None
+    description: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -175,7 +178,7 @@ class GoalOut(BaseModel):
 
 # CategoryBudget schemas
 class CategoryBudgetCreate(BaseModel):
-    category: Literal['Food/Dining','Housing/Rent','Transport','Entertainment','Utilities','Healthcare','Shopping','Other']
+    category: str
     monthly_limit: float = Field(gt=0)
     month: int = Field(ge=1, le=12)
     year: int

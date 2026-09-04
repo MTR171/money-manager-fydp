@@ -8,7 +8,7 @@ const fmt = (amount, currency = 'BDT') => {
   return `${sym}${Number(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 };
 
-export default function GoalsView({ currency = 'BDT' }) {
+export default function GoalsView({ currency = 'BDT', onGoalDeposit, onSync }) {
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -61,7 +61,9 @@ export default function GoalsView({ currency = 'BDT' }) {
       await apiClient.patch(`/api/goals/${selectedGoal.id}/deposit`, { amount: Number(depositAmount) });
       setIsDepositOpen(false);
       setDepositAmount('');
-      fetchGoals();
+      await fetchGoals();
+      onGoalDeposit?.();
+      onSync?.();
     } catch (err) {
       console.error(err);
     }

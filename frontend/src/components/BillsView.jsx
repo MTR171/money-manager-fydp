@@ -8,17 +8,17 @@ const fmt = (amount, currency = 'BDT') => {
   return `${sym}${Number(amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 };
 
-const CATEGORIES = ['Food', 'Housing', 'Transport', 'Entertainment', 'Utilities', 'Healthcare', 'Shopping', 'Other'];
+const CATEGORIES = ['Food/Dining', 'Housing/Rent', 'Transport', 'Entertainment', 'Utilities', 'Healthcare', 'Shopping', 'Other'];
 const FREQUENCIES = ['one-time', 'weekly', 'monthly', 'yearly'];
 
-export default function BillsView({ currency = 'BDT' }) {
+export default function BillsView({ currency = 'BDT', onBillPaid, onSync }) {
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPaidCollapsed, setIsPaidCollapsed] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [form, setForm] = useState({
-    title: '', amount: '', due_date: '', recurring_frequency: 'monthly', category: 'Housing'
+    title: '', amount: '', due_date: '', recurring_frequency: 'monthly', category: 'Housing/Rent'
   });
 
   const fetchBills = async () => {
@@ -47,8 +47,9 @@ export default function BillsView({ currency = 'BDT' }) {
         amount: Number(form.amount)
       });
       setIsModalOpen(false);
-      setForm({ title: '', amount: '', due_date: '', recurring_frequency: 'monthly', category: 'Housing' });
+      setForm({ title: '', amount: '', due_date: '', recurring_frequency: 'monthly', category: 'Housing/Rent' });
       fetchBills();
+      onSync?.();
     } catch (err) {
       console.error(err);
     }
@@ -57,7 +58,9 @@ export default function BillsView({ currency = 'BDT' }) {
   const handleTogglePaid = async (id) => {
     try {
       await apiClient.patch(`/api/bills/${id}/toggle-paid`);
-      fetchBills();
+      await fetchBills();
+      onBillPaid?.();
+      onSync?.();
     } catch (err) {
       console.error(err);
     }

@@ -8,15 +8,31 @@ from auth import get_current_user, User
 
 router = APIRouter(prefix='/api/budgets', tags=['Budgets'])
 
-CATEGORIES = ['Food/Dining', 'Housing/Rent', 'Transport', 'Entertainment', 'Utilities', 'Healthcare', 'Shopping', 'Other']
+CATEGORIES = [
+    'Food/Dining',
+    'Housing/Rent',
+    'Transport',
+    'Entertainment',
+    'Utilities',
+    'Healthcare',
+    'Shopping',
+    'Other'
+]
+
 
 @router.get('/status', response_model=List[BudgetStatusItem])
 def get_budget_status(
     month: int,
     year: int,
-    current_user=Depends(get_current_user),
-    db: Session=Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
+    """
+    Dynamic Budgets:
+    Derives budget consumption and progress strictly from the aggregate expenses
+    of each category in the Transactions table for the requested month and year.
+    No duplicate entries required.
+    """
     # Get user category budgets for the month/year
     budgets = db.query(CategoryBudget).filter(
         CategoryBudget.user_id == current_user.id,
@@ -31,18 +47,22 @@ def get_budget_status(
         Transaction.type == 'expense'
     ).all()
     
-    # Filter in memory because of date
     month_trans = [t for t in transactions if t.date.month == month and t.date.year == year]
     spent_map = {}
     for t in month_trans:
         spent_map[t.category] = spent_map.get(t.category, 0.0) + t.amount
 
+    all_categories = list(CATEGORIES)
+    for cat in list(budget_map.keys()) + list(spent_map.keys()):
+        if cat and cat not in all_categories:
+            all_categories.append(cat)
+
     result = []
-    for cat in CATEGORIES:
+    for cat in all_categories:
         limit = budget_map.get(cat, 0.0)
-        spent = spent_map.get(cat, 0.0)
-        remaining = max(limit - spent, 0.0) if limit > 0 else 0.0
-        pct = (spent / limit) * 100 if limit > 0 else 0.0
+        spent = round(spent_map.get(cat, 0.0), 2)
+        remaining = round(max(limit - spent, 0.0), 2) if limit > 0 else 0.0
+        pct = round((spent / limit) * 100, 1) if limit > 0 else 0.0
         
         stat = 'safe'
         if pct >= 100:
@@ -60,11 +80,12 @@ def get_budget_status(
         ))
     return result
 
+
 @router.post('/', response_model=CategoryBudgetOut)
 def upsert_budget(
     budget_in: CategoryBudgetCreate,
-    current_user=Depends(get_current_user),
-    db: Session=Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     budget = db.query(CategoryBudget).filter(
         CategoryBudget.user_id == current_user.id,
@@ -83,12 +104,14 @@ def upsert_budget(
     db.refresh(budget)
     return budget
 
+
 @router.get('/', response_model=List[CategoryBudgetOut])
-def list_budgets(current_user=Depends(get_current_user), db: Session=Depends(get_db)):
+def list_budgets(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return db.query(CategoryBudget).filter(CategoryBudget.user_id == current_user.id).all()
 
+
 @router.delete('/{budget_id}', status_code=204)
-def delete_budget(budget_id: int, current_user=Depends(get_current_user), db: Session=Depends(get_db)):
+def delete_budget(budget_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     budget = db.query(CategoryBudget).filter(CategoryBudget.id == budget_id, CategoryBudget.user_id == current_user.id).first()
     if not budget:
         raise HTTPException(status_code=404, detail='Budget not found')

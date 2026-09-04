@@ -36,6 +36,14 @@ class Transaction(Base):
 
     user = relationship("User", back_populates="transactions")
 
+    @property
+    def description(self):
+        return self.note
+
+    @description.setter
+    def description(self, value):
+        self.note = value
+
 class Budget(Base):
     __tablename__ = "budgets"
 

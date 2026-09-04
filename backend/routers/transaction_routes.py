@@ -123,13 +123,14 @@ def create_transaction(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    note_val = trans_in.note if trans_in.note is not None else trans_in.description
     new_trans = Transaction(
         user_id=current_user.id,
         amount=trans_in.amount,
         type=trans_in.type,
         category=trans_in.category,
         date=trans_in.date,
-        note=trans_in.note
+        note=note_val
     )
     db.add(new_trans)
     db.commit()
@@ -201,6 +202,8 @@ def update_transaction(
         trans.date = trans_in.date
     if trans_in.note is not None:
         trans.note = trans_in.note
+    elif trans_in.description is not None:
+        trans.note = trans_in.description
 
     db.commit()
     db.refresh(trans)
