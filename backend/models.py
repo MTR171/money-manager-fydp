@@ -18,6 +18,9 @@ class User(Base):
 
     transactions = relationship("Transaction", back_populates="user")
     budgets = relationship("Budget", back_populates="user")
+    goals = relationship('Goal', back_populates='user')
+    category_budgets = relationship('CategoryBudget', back_populates='user')
+    bills = relationship('Bill', back_populates='user')
 
 class Transaction(Base):
     __tablename__ = "transactions"
@@ -50,3 +53,39 @@ class Budget(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="budgets")
+
+class Goal(Base):
+    __tablename__ = 'goals'
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), index=True)
+    title = Column(String)  # e.g. 'Emergency Fund', 'Laptop'
+    target_amount = Column(Float)
+    current_amount = Column(Float, default=0.0)
+    deadline = Column(DateTime, nullable=True)
+    icon = Column(String, default='🎯')  # emoji icon for display
+    created_at = Column(DateTime, default=datetime.utcnow)
+    user = relationship('User', back_populates='goals')
+
+class CategoryBudget(Base):
+    __tablename__ = 'category_budgets'
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), index=True)
+    category = Column(String)  # one of the 8 categories
+    monthly_limit = Column(Float)
+    month = Column(Integer)  # 1-12
+    year = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    user = relationship('User', back_populates='category_budgets')
+
+class Bill(Base):
+    __tablename__ = 'bills'
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), index=True)
+    title = Column(String)  # e.g. 'Internet', 'House Rent'
+    amount = Column(Float)
+    due_date = Column(DateTime)
+    is_paid = Column(Boolean, default=False)
+    recurring_frequency = Column(String, default='monthly')  # 'monthly','weekly','yearly','one-time'
+    category = Column(String, default='Utilities')
+    created_at = Column(DateTime, default=datetime.utcnow)
+    user = relationship('User', back_populates='bills')

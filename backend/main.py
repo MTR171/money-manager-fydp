@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from database import engine, Base
 import models  # noqa: F401
-from routers import auth_routes, transaction_routes, analytics_routes
+from routers import auth_routes, transaction_routes, analytics_routes, goals_routes, budgets_routes, bills_routes
 
 # Create all DB tables
 Base.metadata.create_all(bind=engine)
@@ -37,6 +37,9 @@ async def add_ngrok_header(request: Request, call_next):
 app.include_router(auth_routes.router)
 app.include_router(transaction_routes.router)
 app.include_router(analytics_routes.router)
+app.include_router(goals_routes.router)
+app.include_router(budgets_routes.router)
+app.include_router(bills_routes.router)
 
 # ── Root endpoints ────────────────────────────────────────────────────────────
 @app.get("/")

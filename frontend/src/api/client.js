@@ -91,4 +91,26 @@ export const analyticsAPI = {
   getDashboard:       ()     => apiClient.get('/api/analytics/dashboard-summary'),
 };
 
+export const goalsAPI = {
+  list:    ()         => apiClient.get('/api/goals/'),
+  create:  (data)     => apiClient.post('/api/goals/', data),
+  deposit: (id, data) => apiClient.patch(`/api/goals/${id}/deposit`, data),
+  delete:  (id)       => apiClient.delete(`/api/goals/${id}`),
+};
+
+export const budgetsAPI = {
+  status: (month, year) => apiClient.get('/api/budgets/status', { params: { month, year } }),
+  list:   ()            => apiClient.get('/api/budgets/'),
+  set:    (data)        => apiClient.post('/api/budgets/', data),
+  delete: (id)          => apiClient.delete(`/api/budgets/${id}`),
+};
+
+export const billsAPI = {
+  list:       ()     => apiClient.get('/api/bills/'),
+  create:     (data) => apiClient.post('/api/bills/', data),
+  update:     (id, data) => apiClient.put(`/api/bills/${id}`, data),
+  togglePaid: (id)   => apiClient.patch(`/api/bills/${id}/toggle-paid`),
+  delete:     (id)   => apiClient.delete(`/api/bills/${id}`),
+};
+
 export default apiClient;

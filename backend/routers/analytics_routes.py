@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from datetime import date, timedelta
 import os
@@ -6,11 +6,11 @@ import joblib
 from typing import Dict, Any, List
 
 from database import get_db
-from models import User, Transaction, Budget
+from models import User, Transaction, Budget, CategoryBudget
 from auth import get_current_user
 from schemas import (
     RuleBasedAnalysis, RecommendationAlert, MLPredictRequest, MLPredictResponse,
-    CategoryBreakdown
+    CategoryBreakdown, CashflowMonth, BudgetBenchmark, BudgetBenchmarkCategory
 )
 
 router = APIRouter(prefix='/api/analytics', tags=['Analytics'])
@@ -89,6 +89,13 @@ def get_recommendations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """
+    Returns spending alerts and recommendations evaluated against the user's
+    OWN custom CategoryBudget limits (set in the Budgets page).
+
+    The 50/30/20 rule is NOT used here as a hard constraint — it lives
+    separately in GET /api/analytics/budget-benchmark as an optional advisor.
+    """
     today = date.today()
     all_trans = db.query(Transaction).filter(Transaction.user_id == current_user.id).all()
     monthly_trans = [
@@ -99,148 +106,202 @@ def get_recommendations(
     total_expense = sum(t.amount for t in monthly_trans if t.type == 'expense')
     total_income_trans = sum(t.amount for t in monthly_trans if t.type == 'income')
 
-    # Use profile income if set, else fall back to recorded income
     income = current_user.monthly_income if current_user.monthly_income > 0 else (
         total_income_trans if total_income_trans > 0 else 1.0
     )
 
-    # Category spending
+    # Per-category actual spend this month
     cat_amounts: Dict[str, float] = {}
     for t in monthly_trans:
         if t.type == 'expense':
             cat_amounts[t.category] = cat_amounts.get(t.category, 0) + t.amount
 
-    # 50/30/20 Rule
-    needs_categories = ['Housing/Rent', 'Transport', 'Utilities', 'Healthcare']
-    wants_categories = ['Food/Dining', 'Entertainment', 'Shopping']
+    # ── Load user-defined custom budgets for this month/year ─────────────────
+    custom_budgets = db.query(CategoryBudget).filter(
+        CategoryBudget.user_id == current_user.id,
+        CategoryBudget.month == today.month,
+        CategoryBudget.year == today.year,
+    ).all()
+    custom_limit_map: Dict[str, float] = {cb.category: cb.monthly_limit for cb in custom_budgets}
 
-    needs_spent = sum(cat_amounts.get(c, 0) for c in needs_categories)
-    wants_spent = sum(cat_amounts.get(c, 0) for c in wants_categories)
-    other_spent = sum(amt for cat, amt in cat_amounts.items()
-                      if cat not in needs_categories and cat not in wants_categories)
-
-    needs_target = income * 0.50
-    wants_target = income * 0.30
-    savings_target = income * 0.20
-    actual_savings = income - total_expense
-
-    # Spending velocity (annualized to monthly)
+    # ── Spending velocity ─────────────────────────────────────────────────────
     days_elapsed = max(today.day, 1)
     projected_monthly_spend = (total_expense / days_elapsed) * 30
+    actual_savings = income - total_expense
 
-    budget_metrics = {
-        "needs_spent": round(needs_spent, 2),
-        "needs_target": round(needs_target, 2),
-        "needs_utilization_pct": round((needs_spent / needs_target * 100) if needs_target > 0 else 0, 1),
-        "wants_spent": round(wants_spent, 2),
-        "wants_target": round(wants_target, 2),
-        "wants_utilization_pct": round((wants_spent / wants_target * 100) if wants_target > 0 else 0, 1),
+    # ── Budget metrics (kept for UI display; now uses custom limits) ──────────
+    budget_metrics: Dict[str, Any] = {
+        "income_ref": round(income, 2),
+        "total_expense": round(total_expense, 2),
         "actual_savings": round(actual_savings, 2),
-        "savings_target": round(savings_target, 2),
         "projected_monthly_spend": round(projected_monthly_spend, 2),
+        "custom_budgets_set": len(custom_limit_map),
     }
 
     alerts: List[RecommendationAlert] = []
     recommendations: List[str] = []
 
-    # 50/30/20 alerts
-    if needs_spent > needs_target:
-        alerts.append(RecommendationAlert(
-            type="danger",
-            title="Needs Budget Exceeded (50% rule)",
-            message=f"You've spent ${needs_spent:.0f} on needs vs the recommended ${needs_target:.0f} (50% of income)."
-        ))
-    elif needs_spent > needs_target * 0.8:
-        alerts.append(RecommendationAlert(
-            type="warning",
-            title="Needs Budget at 80%",
-            message=f"Your needs spending is approaching the 50% budget limit. ${needs_target - needs_spent:.0f} remaining."
-        ))
+    # ── 1. Alerts from custom category budgets (primary rule engine) ──────────
+    if custom_limit_map:
+        for cat, limit in custom_limit_map.items():
+            spent = cat_amounts.get(cat, 0)
+            pct = (spent / limit * 100) if limit > 0 else 0
+            if pct >= 100:
+                alerts.append(RecommendationAlert(
+                    type="danger",
+                    title=f"{cat} Budget Exceeded",
+                    message=f"You've spent {spent:.0f} on {cat} vs your custom limit of {limit:.0f} ({pct:.0f}% used). Reduce {cat} spending to stay on track."
+                ))
+            elif pct >= 80:
+                alerts.append(RecommendationAlert(
+                    type="warning",
+                    title=f"{cat} Near Budget Limit",
+                    message=f"You've used {pct:.0f}% of your {cat} budget ({spent:.0f} / {limit:.0f}). Only {limit - spent:.0f} remaining."
+                ))
+    else:
+        # No custom budgets — friendly nudge instead of a hard alert
+        recommendations.append(
+            "💡 No custom category budgets are set yet. Visit the Budgets page to set your own monthly spending limits per category."
+        )
 
-    if wants_spent > wants_target:
-        alerts.append(RecommendationAlert(
-            type="danger",
-            title="Wants Budget Exceeded (30% rule)",
-            message=f"Discretionary spending (${wants_spent:.0f}) exceeds the 30% limit (${wants_target:.0f})."
-        ))
-    elif wants_spent > wants_target * 0.8:
-        alerts.append(RecommendationAlert(
-            type="warning",
-            title="Wants Budget at 80%",
-            message=f"Discretionary spending is 80% of the recommended limit. Consider reducing non-essentials."
-        ))
-
-    # Spending velocity alert
+    # ── 2. Spending velocity alert (always active) ────────────────────────────
     if projected_monthly_spend > income:
         overshoot = projected_monthly_spend - income
         alerts.append(RecommendationAlert(
             type="danger",
             title="Overspending Velocity Alert",
-            message=f"At your current rate, you'll overspend by ${overshoot:.0f} this month."
+            message=f"At your current daily rate, you'll overspend by {overshoot:.0f} this month. Try to cut back immediately."
         ))
 
-    # Savings alerts
+    # ── 3. Savings health alerts (always active) ──────────────────────────────
     if actual_savings < 0:
         alerts.append(RecommendationAlert(
             type="danger",
-            title="Negative Savings",
-            message=f"You're spending more than you earn this month (deficit: ${abs(actual_savings):.0f})."
+            title="Negative Savings — Deficit Month",
+            message=f"You're spending {abs(actual_savings):.0f} more than you earn this month. Review your largest expense categories."
         ))
-    elif actual_savings < savings_target:
-        shortfall = savings_target - actual_savings
+    elif income > 0 and (actual_savings / income) < 0.10:
         alerts.append(RecommendationAlert(
             type="warning",
-            title="Savings Below Target",
-            message=f"You're ${shortfall:.0f} below your 20% savings target of ${savings_target:.0f}."
+            title="Low Savings Rate",
+            message=f"Your savings rate is only {(actual_savings/income*100):.0f}% this month. Consider reducing discretionary spending."
         ))
 
-    # Category-specific alerts (>80% and >100% per category budget)
-    cat_budget_map = {
-        'Food/Dining': income * 0.15,
-        'Housing/Rent': income * 0.30,
-        'Transport': income * 0.10,
-        'Entertainment': income * 0.05,
-        'Utilities': income * 0.10,
-        'Healthcare': income * 0.05,
-        'Shopping': income * 0.10,
-        'Other': income * 0.15,
-    }
-    for cat, budget_amt in cat_budget_map.items():
-        spent = cat_amounts.get(cat, 0)
-        if spent > budget_amt:
-            alerts.append(RecommendationAlert(
-                type="warning",
-                title=f"{cat} Over Budget",
-                message=f"Spent ${spent:.0f} on {cat} vs ${budget_amt:.0f} budget (100% exceeded)."
-            ))
-        elif spent > budget_amt * 0.8:
-            alerts.append(RecommendationAlert(
-                type="info",
-                title=f"{cat} Near Budget",
-                message=f"You've used 80%+ of your {cat} budget (${spent:.0f} / ${budget_amt:.0f})."
-            ))
-
-    # Positive recommendations
-    if actual_savings >= savings_target:
-        recommendations.append(f"✅ Great job! You're on track to save ${actual_savings:.0f} this month, meeting your 20% savings goal.")
-    if needs_spent <= needs_target * 0.7:
-        recommendations.append("✅ Your essential expenses are well within the 50% budget. Keep it up!")
+    # ── 4. Positive recommendations ───────────────────────────────────────────
+    if actual_savings >= income * 0.20:
+        recommendations.append(f"✅ Excellent! You're saving {(actual_savings/income*100):.0f}% of your income this month. Consider investing the surplus.")
     if not alerts:
-        recommendations.append("✅ Your finances look healthy this month. Consider investing your surplus savings.")
+        recommendations.append("✅ All your custom budgets are healthy this month. Great financial discipline!")
 
-    recommendations.append("💡 Review your top spending category and set a specific limit to avoid overspending.")
+    recommendations.append("💡 Check the 50/30/20 Advisor tab in Budgets to compare your spending against the global benchmark.")
     recommendations.append("💡 Automate bill payments to avoid late fees and reduce financial stress.")
 
     if current_user.target_savings_goal > 0:
         progress_pct = min((actual_savings / current_user.target_savings_goal) * 100, 100)
         recommendations.append(
-            f"🎯 Savings goal progress: ${actual_savings:.0f} / ${current_user.target_savings_goal:.0f} ({progress_pct:.0f}%)"
+            f"🎯 Savings goal progress: {actual_savings:.0f} / {current_user.target_savings_goal:.0f} ({progress_pct:.0f}%)"
         )
 
     return RuleBasedAnalysis(
         budget_metrics=budget_metrics,
         alerts=alerts,
         recommendations=recommendations
+    )
+
+
+# ── 50/30/20 Financial Health Benchmark (optional advisor) ────────────────────
+
+# Canonical 50/30/20 allocation per category (derived from standard guidance)
+NEEDS_CATEGORIES = ['Housing/Rent', 'Transport', 'Utilities', 'Healthcare']
+WANTS_CATEGORIES = ['Food/Dining', 'Entertainment', 'Shopping']
+CATEGORY_50_30_20_PCT = {
+    'Food/Dining':    0.15,
+    'Housing/Rent':   0.30,
+    'Transport':      0.10,
+    'Entertainment':  0.05,
+    'Utilities':      0.10,
+    'Healthcare':     0.05,
+    'Shopping':       0.10,
+    'Other':          0.15,
+}
+
+
+@router.get('/budget-benchmark', response_model=BudgetBenchmark)
+def get_budget_benchmark(
+    month: int = Query(default=None, ge=1, le=12),
+    year: int = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    50/30/20 Financial Health Benchmark — ADVISORY ONLY.
+    Shows how the user's spending compares against the standard 50/30/20 rule.
+    Does NOT generate blocking alerts; provides educational context only.
+    """
+    today = date.today()
+    m = month or today.month
+    y = year or today.year
+
+    monthly_trans = db.query(Transaction).filter(
+        Transaction.user_id == current_user.id
+    ).all()
+    monthly_trans = [t for t in monthly_trans if t.date.year == y and t.date.month == m]
+
+    total_expense = sum(t.amount for t in monthly_trans if t.type == 'expense')
+    total_income_trans = sum(t.amount for t in monthly_trans if t.type == 'income')
+
+    income = current_user.monthly_income if current_user.monthly_income > 0 else (
+        total_income_trans if total_income_trans > 0 else 1.0
+    )
+
+    cat_amounts: Dict[str, float] = {}
+    for t in monthly_trans:
+        if t.type == 'expense':
+            cat_amounts[t.category] = cat_amounts.get(t.category, 0) + t.amount
+
+    needs_spent = sum(cat_amounts.get(c, 0) for c in NEEDS_CATEGORIES)
+    wants_spent = sum(cat_amounts.get(c, 0) for c in WANTS_CATEGORIES)
+    actual_savings = income - total_expense
+
+    needs_target = income * 0.50
+    wants_target = income * 0.30
+    savings_target = income * 0.20
+
+    days_elapsed = max(today.day, 1)
+    projected = (total_expense / days_elapsed) * 30
+
+    # Per-category benchmark breakdown
+    breakdown = []
+    for cat, pct in CATEGORY_50_30_20_PCT.items():
+        spent = cat_amounts.get(cat, 0)
+        limit = income * pct
+        pct_used = (spent / limit * 100) if limit > 0 else 0
+        breakdown.append(BudgetBenchmarkCategory(
+            category=cat,
+            spent=round(spent, 2),
+            benchmark_limit=round(limit, 2),
+            percentage_of_benchmark=round(pct_used, 1),
+            status='over' if pct_used >= 100 else ('warning' if pct_used >= 80 else 'safe'),
+        ))
+
+    over_count = sum(1 for b in breakdown if b.status == 'over')
+    summary = "On Track" if over_count == 0 and actual_savings >= savings_target else \
+              "Needs Attention" if over_count <= 2 else "High Risk"
+
+    return BudgetBenchmark(
+        income_ref=round(income, 2),
+        needs_spent=round(needs_spent, 2),
+        needs_target=round(needs_target, 2),
+        needs_pct=round((needs_spent / needs_target * 100) if needs_target > 0 else 0, 1),
+        wants_spent=round(wants_spent, 2),
+        wants_target=round(wants_target, 2),
+        wants_pct=round((wants_spent / wants_target * 100) if wants_target > 0 else 0, 1),
+        actual_savings=round(actual_savings, 2),
+        savings_target=round(savings_target, 2),
+        savings_pct=round((actual_savings / income * 100) if income > 0 else 0, 1),
+        projected_monthly_spend=round(projected, 2),
+        category_breakdown=breakdown,
+        summary=summary,
     )
 
 
@@ -397,3 +458,32 @@ def get_dashboard_summary(
             "currency": current_user.currency
         }
     }
+
+@router.get('/cashflow-trend', response_model=List[CashflowMonth])
+def get_cashflow_trend(
+    months: int = 6,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    months = min(max(months, 1), 12)
+    today = date.today()
+    
+    all_trans = db.query(Transaction).filter(Transaction.user_id == current_user.id).all()
+    
+    result = []
+    import calendar
+    for i in range(months - 1, -1, -1):
+        m = today.month - i
+        y = today.year
+        while m <= 0:
+            m += 12
+            y -= 1
+            
+        month_trans = [t for t in all_trans if t.date.year == y and t.date.month == m]
+        income = sum(t.amount for t in month_trans if t.type == 'income')
+        expense = sum(t.amount for t in month_trans if t.type == 'expense')
+        
+        month_str = calendar.month_abbr[m]
+        result.append(CashflowMonth(month=month_str, income=income, expense=expense))
+        
+    return result

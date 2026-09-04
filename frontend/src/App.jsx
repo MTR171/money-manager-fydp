@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   LogIn, UserPlus, LogOut, Plus, Settings, LayoutDashboard,
-  List, RefreshCw, Search, Filter, ChevronDown, X, Save,
-  TrendingUp, DollarSign, Menu, Bell
+  List, RefreshCw, Search, X, Save,
+  TrendingUp, DollarSign, Menu, Bell,
+  Target, PiggyBank, Receipt, BarChart3, Wallet
 } from 'lucide-react';
 import { authAPI, transactionsAPI, analyticsAPI } from './api/client';
 import DashboardCards from './components/DashboardCards';
@@ -11,6 +12,10 @@ import TransactionModal from './components/TransactionModal';
 import AIRecommendations from './components/AIRecommendations';
 import InstallBanner from './components/InstallBanner';
 import OfflineBar from './components/OfflineBar';
+import GoalsView from './components/GoalsView';
+import BudgetsView from './components/BudgetsView';
+import BillsView from './components/BillsView';
+import ReportsView from './components/ReportsView';
 
 // ── Forgot Password Modal ─────────────────────────────────────────────────────
 const ForgotPasswordModal = ({ onClose }) => {
@@ -571,8 +576,12 @@ export default function App() {
   if (!user) return <AuthPage onLogin={handleLogin} />;
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
     { id: 'transactions', label: 'Transactions', icon: List },
+    { id: 'budgets',      label: 'Budgets',      icon: Wallet },
+    { id: 'goals',        label: 'Goals',        icon: Target },
+    { id: 'bills',        label: 'Bills',        icon: Receipt },
+    { id: 'reports',      label: 'Reports',      icon: BarChart3 },
   ];
 
   return (
@@ -655,7 +664,9 @@ export default function App() {
               <Menu size={20} className="text-gray-600" />
             </button>
             <div>
-              <h2 className="text-lg font-bold text-gray-800 capitalize">{activeView}</h2>
+              <h2 className="text-lg font-bold text-gray-800">
+                {navItems.find(n => n.id === activeView)?.label || 'Dashboard'}
+              </h2>
               <p className="text-xs text-gray-400 hidden sm:block">
                 {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
@@ -716,6 +727,22 @@ export default function App() {
               onDelete={handleDeleteTransaction}
               currency={user.currency || 'USD'}
             />
+          )}
+
+          {activeView === 'budgets' && (
+            <BudgetsView currency={user.currency || 'BDT'} />
+          )}
+
+          {activeView === 'goals' && (
+            <GoalsView currency={user.currency || 'BDT'} />
+          )}
+
+          {activeView === 'bills' && (
+            <BillsView currency={user.currency || 'BDT'} />
+          )}
+
+          {activeView === 'reports' && (
+            <ReportsView currency={user.currency || 'BDT'} />
           )}
         </main>
       </div>

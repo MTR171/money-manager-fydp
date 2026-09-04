@@ -63,18 +63,38 @@ const AIRecommendations = ({ recommendations, onRefresh, loading = false }) => {
           {/* Budget Metrics */}
           {Object.keys(budget_metrics).length > 0 && (
             <div>
-              <h4 className="text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">50/30/20 Budget Analysis</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {Object.entries(budget_metrics).map(([key, val]) => (
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Spending Overview</h4>
+                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                  {budget_metrics.custom_budgets_set > 0
+                    ? `${budget_metrics.custom_budgets_set} custom budget${budget_metrics.custom_budgets_set > 1 ? 's' : ''} active`
+                    : 'No custom budgets set'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { key: 'income_ref',              label: 'Income Ref' },
+                  { key: 'total_expense',            label: 'Total Spent' },
+                  { key: 'actual_savings',           label: 'Net Savings' },
+                  { key: 'projected_monthly_spend',  label: 'Projected Spend' },
+                ].map(({ key, label }) => budget_metrics[key] !== undefined && (
                   <div key={key} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                    <p className="text-xs text-gray-500 capitalize mb-1">{key.replace(/_/g, ' ')}</p>
-                    <p className="font-semibold text-gray-800 text-sm">
-                      {typeof val === 'number' ? val.toFixed(1) : val}
-                      {key.includes('pct') || key.includes('rate') || key.includes('ratio') ? '%' : ''}
+                    <p className="text-xs text-gray-500 mb-1">{label}</p>
+                    <p className={`font-semibold text-sm ${
+                      key === 'actual_savings' && budget_metrics[key] < 0 ? 'text-red-600' : 'text-gray-800'
+                    }`}>
+                      {typeof budget_metrics[key] === 'number'
+                        ? budget_metrics[key].toLocaleString('en-US', { maximumFractionDigits: 0 })
+                        : budget_metrics[key]}
                     </p>
                   </div>
                 ))}
               </div>
+              {budget_metrics.custom_budgets_set === 0 && (
+                <p className="text-xs text-blue-600 mt-2 bg-blue-50 px-3 py-2 rounded-lg border border-blue-100">
+                  💡 Go to <strong>Budgets → My Budgets</strong> to set category limits — alerts below will then be based on your own numbers.
+                </p>
+              )}
             </div>
           )}
 
