@@ -1,11 +1,13 @@
+import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from database import engine, Base
+from database import engine, Base, DATABASE_URL
 import models  # noqa: F401
 from routers import auth_routes, transaction_routes, analytics_routes, goals_routes, budgets_routes, bills_routes
 
-# Create all DB tables
+# ── Non-Destructive Database Schema Verification ──────────────────────────────
+# Base.metadata.create_all emits 'CREATE TABLE IF NOT EXISTS' without altering or dropping existing rows
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
@@ -41,11 +43,13 @@ app.include_router(goals_routes.router)
 app.include_router(budgets_routes.router)
 app.include_router(bills_routes.router)
 
-# ── Root endpoints ────────────────────────────────────────────────────────────
+# ── Root & Health Endpoints ───────────────────────────────────────────────────
 @app.get("/")
 def root():
-    return {"message": "Money Manager API v1.0.0", "status": "running"}
+    db_type = "postgresql" if "postgresql" in DATABASE_URL else "sqlite"
+    return {"message": "Money Manager API v1.0.0", "status": "running", "database": db_type}
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    db_type = "postgresql" if "postgresql" in DATABASE_URL else "sqlite"
+    return {"status": "healthy", "database": db_type}

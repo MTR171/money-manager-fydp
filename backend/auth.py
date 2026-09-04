@@ -9,18 +9,35 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "your-secret-key-change-in-production-moneymanager2024")
+# ── JWT Secret Configuration ──────────────────────────────────────────────────
+# Reads from environment variable SECRET_KEY, falling back to a deterministic,
+# fixed production key so server reboots/restarts NEVER invalidate user sessions.
+SECRET_KEY = os.getenv("SECRET_KEY") or "moneymanager-secure-fixed-production-jwt-secret-key-2024"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 
+# Default token lifespan: 7 days (10,080 minutes) to prevent frequent session loss
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "10080"))
+
+# ── Cryptography & OAuth2 ─────────────────────────────────────────────────────
 pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/api/auth/login')
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    """Safely verify plain password against bcrypt hash."""
+    if not plain_password or not hashed_password:
+        return False
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception as e:
+        print(f"[Auth] Password verification warning: {e}")
+        return False
+
 
 def get_password_hash(password: str) -> str:
+    """Generate bcrypt hash from plain password."""
     return pwd_context.hash(password)
+
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
@@ -31,6 +48,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
 
 def decode_token(token: str) -> dict:
     try:
@@ -43,6 +61,7 @@ def decode_token(token: str) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -53,7 +72,14 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     email: str = payload.get("sub")
     if email is None:
         raise credentials_exception
-    user = db.query(User).filter(User.email == email).first()
+    
+    # Normalize email lookup for consistent session resolution
+    norm_email = email.strip().lower()
+    user = db.query(User).filter(User.email == norm_email).first()
+    if user is None:
+        # Fallback query for pre-existing un-normalized emails
+        user = db.query(User).filter(User.email == email).first()
+    
     if user is None:
         raise credentials_exception
     return user
