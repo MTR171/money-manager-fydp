@@ -172,7 +172,7 @@ export default function GoalsView({ currency = 'BDT' }) {
                 <div className="w-full bg-slate-100 rounded-full h-3 mb-4">
                   <div
                     className={`${colorClass} h-3 rounded-full transition-all duration-500`}
-                    style={{ width: \`\${progress}%\` }}
+                    style={{ width: `${progress}%` }}
                   ></div>
                 </div>
 

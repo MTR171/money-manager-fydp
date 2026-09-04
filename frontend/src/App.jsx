@@ -17,6 +17,7 @@ import BudgetsView from './components/BudgetsView';
 import BillsView from './components/BillsView';
 import ReportsView from './components/ReportsView';
 import SettingsView from './components/SettingsView';
+import Sidebar, { NAV_ITEMS } from './components/Sidebar';
 
 // ── Forgot Password Modal ─────────────────────────────────────────────────────
 const ForgotPasswordModal = ({ onClose }) => {
@@ -576,114 +577,19 @@ export default function App() {
 
   if (!user) return <AuthPage onLogin={handleLogin} />;
 
-  const navItems = [
-    { id: 'dashboard',    label: 'Dashboard',    icon: LayoutDashboard },
-    { id: 'transactions', label: 'Transactions', icon: List },
-    { id: 'budgets',      label: 'Budgets',      icon: Wallet },
-    { id: 'goals',        label: 'Goals',        icon: Target },
-    { id: 'bills',        label: 'Bills',        icon: Receipt },
-    { id: 'reports',      label: 'Reports',      icon: BarChart3 },
-    { id: 'settings',     label: 'Settings',     icon: Settings },
-  ];
+  const navItems = NAV_ITEMS;
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-    <aside className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-100 transform transition-transform duration-300 flex flex-col ${
-      sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-    } lg:translate-x-0 lg:static`}>
-
-      {/* ── Logo ─────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-100">
-        <div className="p-2.5 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-sm">
-          <DollarSign size={18} className="text-white" />
-        </div>
-        <div>
-          <h1 className="font-bold text-gray-800 text-sm leading-tight tracking-tight">Money Manager</h1>
-          <p className="text-[11px] text-gray-400 mt-0.5">AI Finance Tracker</p>
-        </div>
-      </div>
-
-      {/* ── Main nav ─────────────────────────────────────────────────── */}
-      <nav className="flex-1 px-3 pt-4 pb-2 space-y-0.5 overflow-y-auto">
-        {navItems.slice(0, -1).map(item => {
-          const Icon = item.icon;
-          const active = activeView === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => { setActiveView(item.id); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group relative ${
-                active
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
-              }`}
-            >
-              {/* active left bar */}
-              {active && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-blue-600 rounded-r-full" />
-              )}
-              <Icon
-                size={17}
-                className={active ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}
-              />
-              {item.label}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* ── Bottom: Settings + Logout + user chip ────────────────────── */}
-      <div className="px-3 pb-4 pt-2 border-t border-gray-100 space-y-0.5">
-        {/* Settings nav item (last in navItems) */}
-        {(() => {
-          const item = navItems[navItems.length - 1]; // 'settings'
-          const Icon = item.icon;
-          const active = activeView === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => { setActiveView(item.id); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group relative ${
-                active
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
-              }`}
-            >
-              {active && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-blue-600 rounded-r-full" />
-              )}
-              <Icon size={17} className={active ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'} />
-              {item.label}
-            </button>
-          );
-        })()}
-
-        {/* Logout */}
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 transition-colors"
-        >
-          <LogOut size={17} />
-          Logout
-        </button>
-
-        {/* User chip */}
-        <div className="flex items-center gap-3 px-3 pt-2 mt-1 border-t border-gray-100">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-xs font-bold">{user.full_name?.[0]?.toUpperCase() || 'U'}</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-800 truncate">{user.full_name || 'User'}</p>
-            <p className="text-[11px] text-gray-400 truncate">{user.email}</p>
-          </div>
-        </div>
-      </div>
-    </aside>
-
-      {/* Sidebar overlay for mobile */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/30 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} />
-      )}
+      {/* Sidebar Component */}
+      <Sidebar
+        activeView={activeView}
+        setActiveView={setActiveView}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        user={user}
+        onLogout={handleLogout}
+      />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
