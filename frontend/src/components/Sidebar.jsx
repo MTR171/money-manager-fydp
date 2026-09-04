@@ -151,6 +151,22 @@ export default function Sidebar({
               <p className="text-[11px] text-gray-400 truncate">{user?.email}</p>
             </div>
           </div>
+
+          {/* Dynamic Version & Live Status Badge */}
+          <div className="mt-2 pt-2 border-t border-gray-100 px-3 flex items-center justify-between text-xs text-gray-400 font-mono">
+            <div className="flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              <span>v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.1.0'}</span>
+              <span className="text-gray-300">•</span>
+              <span className="text-emerald-600 font-medium font-sans">Stable</span>
+            </div>
+            {typeof __BUILD_DATE__ !== 'undefined' && (
+              <span className="text-[10px] text-gray-400">{__BUILD_DATE__}</span>
+            )}
+          </div>
         </div>
       </aside>
     </>

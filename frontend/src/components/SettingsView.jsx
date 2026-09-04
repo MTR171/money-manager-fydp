@@ -328,10 +328,13 @@ export default function SettingsView({ user, onUpdate }) {
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl border border-blue-100 px-6 py-4 flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-gray-700">Money Manager AI</p>
-              <p className="text-xs text-gray-400 mt-0.5">FYDP · FastAPI + React + ML · v1.0.0</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                FYDP · FastAPI + React + ML · v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.1.0'}
+                {typeof __BUILD_DATE__ !== 'undefined' ? ` (${__BUILD_DATE__})` : ''}
+              </p>
             </div>
-            <div className="flex items-center gap-1.5 text-xs text-green-600 bg-green-50 border border-green-200 px-3 py-1.5 rounded-full">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <div className="flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full font-medium">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               All systems operational
             </div>
           </div>

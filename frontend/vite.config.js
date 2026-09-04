@@ -11,6 +11,10 @@ export default defineConfig(({ mode }) => {
   const useProxy = !env.VITE_API_URL
 
   return {
+    define: {
+      __APP_VERSION__: JSON.stringify(process.env.npm_package_version || "1.1.0"),
+      __BUILD_DATE__: JSON.stringify(new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })),
+    },
     plugins: [
       react(),
 
