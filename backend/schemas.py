@@ -84,6 +84,8 @@ class RegisterResponse(BaseModel):
     email: str
     is_verified: bool = False
     verification_link: Optional[str] = None
+    access_token: Optional[str] = None
+    user: Optional[UserOut] = None
 
 
 class VerifyEmailResponse(BaseModel):

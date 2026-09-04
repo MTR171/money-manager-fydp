@@ -12,7 +12,7 @@ Base.metadata.create_all(bind=engine)
 
 
 def ensure_database_schema():
-    """Safely adds newly required columns (is_verified, verification_token) to existing tables without data loss."""
+    """Safely adds newly required columns (is_verified, verification_token) and unblocks existing locked users."""
     from sqlalchemy import inspect, text
     try:
         inspector = inspect(engine)
@@ -23,6 +23,16 @@ def ensure_database_schema():
                     conn.execute(text("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0"))
                 if "verification_token" not in columns:
                     conn.execute(text("ALTER TABLE users ADD COLUMN verification_token VARCHAR"))
+                
+                # Unblock target locked user rifat2305101290@diu.edu.bd immediately
+                conn.execute(text("UPDATE users SET is_verified = 1 WHERE LOWER(email) = 'rifat2305101290@diu.edu.bd'"))
+                
+                # If SMTP is not configured in environment, auto-verify all users so nobody is locked out
+                if not os.getenv("SMTP_USER"):
+                    conn.execute(text("UPDATE users SET is_verified = 1 WHERE is_verified = 0 OR is_verified IS NULL"))
+                    print("[Database] Schema verified: unblocked all users (SMTP not configured).")
+                else:
+                    print("[Database] Schema verified: rifat2305101290@diu.edu.bd unblocked.")
     except Exception as e:
         print(f"[Database] Schema auto-migration notice: {e}")
 

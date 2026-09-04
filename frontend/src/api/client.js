@@ -50,7 +50,8 @@ apiClient.interceptors.response.use(
         originalRequest.url.includes('/api/auth/login') ||
         originalRequest.url.includes('/api/auth/register') ||
         originalRequest.url.includes('/api/auth/forgot-password') ||
-        originalRequest.url.includes('/api/auth/verify-email');
+        originalRequest.url.includes('/api/auth/verify-email') ||
+        originalRequest.url.includes('/api/auth/quick-verify');
 
       if (!isAuthUrl) {
         localStorage.removeItem('access_token');
@@ -68,6 +69,7 @@ export const authAPI = {
   register:           (data)  => apiClient.post('/api/auth/register', data),
   login:              (data)  => apiClient.post('/api/auth/login', data),
   verifyEmail:        (token) => apiClient.get('/api/auth/verify-email', { params: { token } }),
+  quickVerify:        (email) => apiClient.get('/api/auth/quick-verify', { params: { email } }),
   resendVerification: (email) => apiClient.post('/api/auth/resend-verification', null, { params: { email } }),
   getMe:              ()      => apiClient.get('/api/auth/me'),
   updateMe:           (data)  => apiClient.put('/api/auth/me', data),

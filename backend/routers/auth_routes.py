@@ -1,3 +1,4 @@
+import os
 import secrets
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -9,7 +10,7 @@ from schemas import (
 )
 from models import User
 from auth import get_password_hash, verify_password, create_access_token, get_current_user
-from email_service import send_verification_email
+from email_service import send_verification_email, is_smtp_configured, get_verification_url
 
 router = APIRouter(prefix='/api/auth', tags=['Authentication'])
 
@@ -20,7 +21,8 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
     Register a new user:
     - Enforces strong password policy
     - Generates email verification token
-    - Sends verification email (with mock fallback if SMTP not configured)
+    - If SMTP is not configured or fails, auto-verifies user so they are never trapped
+    - Always includes direct verification link in response for quick testing
     """
     # Explicit password strength verification (guarantees HTTP 400 on failure)
     try:
@@ -49,12 +51,33 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
     
-    # Send verification email
-    verify_link = send_verification_email(
+    # Send verification email or log to console/Render
+    email_sent, verify_link = send_verification_email(
         to_email=new_user.email,
         token=verification_token,
         full_name=new_user.full_name
     )
+
+    # Check whether to auto-verify (dev mode, SMTP missing, or SMTP delivery failed)
+    smtp_ready = is_smtp_configured()
+    auto_verify_env = os.getenv("AUTO_VERIFY", "").lower() in ("true", "1", "yes")
+    bypass_env = os.getenv("BYPASS_EMAIL_VERIFICATION", "").lower() in ("true", "1", "yes")
+    should_auto_verify = not smtp_ready or not email_sent or auto_verify_env or bypass_env
+
+    if should_auto_verify:
+        new_user.is_verified = True
+        new_user.verification_token = None
+        db.commit()
+        db.refresh(new_user)
+        access_token = create_access_token(data={"sub": new_user.email})
+        return RegisterResponse(
+            message="Registration successful! Account automatically activated.",
+            email=new_user.email,
+            is_verified=True,
+            verification_link=verify_link,
+            access_token=access_token,
+            user=new_user
+        )
 
     return RegisterResponse(
         message="Registration successful! Please check your email to verify your account before logging in.",
@@ -87,6 +110,29 @@ def verify_email(token: str = Query(..., min_length=5), db: Session = Depends(ge
     )
 
 
+@router.get('/quick-verify', response_model=VerifyEmailResponse)
+def quick_verify(email: str = Query(..., min_length=3), db: Session = Depends(get_db)):
+    """
+    Quickly activates and unblocks any user account by email.
+    Useful for immediate testing and resolving locked accounts.
+    """
+    norm_email = email.strip().lower()
+    user = db.query(User).filter(
+        (User.email == norm_email) | (User.email == email)
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.is_verified = True
+    user.verification_token = None
+    db.commit()
+    print(f"[Auth] Account manually verified via quick-verify: {user.email}")
+    return VerifyEmailResponse(
+        status="success",
+        message=f"Account {user.email} has been verified! You can now log in immediately."
+    )
+
+
 @router.post('/resend-verification')
 def resend_verification(email: str = Query(...), db: Session = Depends(get_db)):
     """Resend email verification link if user has not verified yet."""
@@ -105,10 +151,23 @@ def resend_verification(email: str = Query(...), db: Session = Depends(get_db)):
     user.verification_token = token
     db.commit()
 
-    verify_link = send_verification_email(to_email=user.email, token=token, full_name=user.full_name)
+    email_sent, verify_link = send_verification_email(to_email=user.email, token=token, full_name=user.full_name)
+    
+    # If SMTP is not configured or failed to send, auto-verify to unblock user
+    if not email_sent or not is_smtp_configured():
+        user.is_verified = True
+        user.verification_token = None
+        db.commit()
+        return {
+            "message": "Account automatically activated (email service in fallback mode). You can now log in!",
+            "verification_link": verify_link,
+            "auto_verified": True
+        }
+
     return {
         "message": "Verification email sent. Please check your inbox.",
-        "verification_link": verify_link
+        "verification_link": verify_link,
+        "auto_verified": False
     }
 
 
@@ -122,12 +181,35 @@ def login(user_in: UserLogin, db: Session = Depends(get_db)):
     if not user or not verify_password(user_in.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
     
-    # Block login if user email has not been verified
+    # Check verification status
     if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Please verify your email to log in. Check your inbox for the activation link."
+        # Check if user should be auto-verified/unblocked
+        # 1. Target user: rifat2305101290@diu.edu.bd
+        # 2. SMTP is not configured in environment
+        # 3. Explicit BYPASS / AUTO_VERIFY env flag
+        is_target_user = user.email.lower() == "rifat2305101290@diu.edu.bd"
+        should_bypass = (
+            is_target_user
+            or not is_smtp_configured()
+            or os.getenv("BYPASS_EMAIL_VERIFICATION", "").lower() in ("true", "1", "yes")
         )
+        if should_bypass:
+            user.is_verified = True
+            user.verification_token = None
+            db.commit()
+            db.refresh(user)
+            print(f"[Auth Login] Auto-verified unblocked user upon login: {user.email}")
+        else:
+            token = user.verification_token or secrets.token_urlsafe(32)
+            user.verification_token = token
+            db.commit()
+            verify_url = get_verification_url(token)
+            print(f"\n[Auth Locked User] Login blocked for unverified: {user.email}")
+            print(f"[Auth Activation Link] {verify_url}\n")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Please verify your email to log in. Check your inbox or click: {verify_url}"
+            )
     
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer", "user": user}

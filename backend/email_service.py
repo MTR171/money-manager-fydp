@@ -2,7 +2,7 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional
+from typing import Optional, Tuple
 
 FRONTEND_URL = os.getenv("FRONTEND_URL") or os.getenv("APP_URL") or "http://localhost:5173"
 
@@ -13,28 +13,34 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD") or os.getenv("SMTP_PASS")
 SMTP_FROM = os.getenv("SMTP_FROM") or SMTP_USER or "Money Manager <noreply@moneymanager.com>"
 
 
+def is_smtp_configured() -> bool:
+    """Check if all necessary SMTP environment variables are defined."""
+    return bool(SMTP_HOST and SMTP_USER and SMTP_PASSWORD)
+
+
 def get_verification_url(token: str) -> str:
     """Build the frontend email verification URL."""
     base = FRONTEND_URL.rstrip('/')
     return f"{base}/verify-email?token={token}"
 
 
-def send_verification_email(to_email: str, token: str, full_name: str = "User") -> str:
+def send_verification_email(to_email: str, token: str, full_name: str = "User") -> Tuple[bool, str]:
     """
     Send account verification email via SMTP.
-    If SMTP credentials are not configured, prints a mock fallback to console.
-    Returns the verification link.
+    If SMTP credentials are not configured or sending fails, prints a clear,
+    prominent banner to the console/Render logs and returns (False, verification_url).
+    If sent successfully, returns (True, verification_url).
     """
     verification_url = get_verification_url(token)
 
-    # If SMTP is not configured, use local mock fallback
-    if not (SMTP_HOST and SMTP_USER and SMTP_PASSWORD):
-        print(f"\n==================================================")
-        print(f" [Email Service - Mock Fallback] Verification Email")
-        print(f" To: {to_email} ({full_name})")
-        print(f" Verification Link: {verification_url}")
-        print(f"==================================================\n")
-        return verification_url
+    # If SMTP is not configured, log to console for development/Render preview
+    if not is_smtp_configured():
+        print("\n" + "=" * 65)
+        print(" [EMAIL SERVICE - MOCK/FALLBACK] SMTP NOT CONFIGURED")
+        print(f" User:              {to_email} ({full_name})")
+        print(f" Direct Link:       {verification_url}")
+        print("=" * 65 + "\n")
+        return False, verification_url
 
     try:
         msg = MIMEMultipart("alternative")
@@ -94,9 +100,14 @@ Money Manager Team
         server.login(SMTP_USER, SMTP_PASSWORD)
         server.sendmail(SMTP_FROM, [to_email], msg.as_string())
         server.quit()
-        print(f"[Email Service] Verification email successfully sent to {to_email}")
-    except Exception as e:
-        print(f"[Email Service] Error sending email via SMTP: {e}. Falling back to console log.")
-        print(f"Verification link: {verification_url}")
+        print(f"[Email Service] Verification email successfully sent via SMTP to {to_email}")
+        return True, verification_url
 
-    return verification_url
+    except Exception as e:
+        print("\n" + "=" * 65)
+        print(" [EMAIL SERVICE - SMTP ERROR - LOGGED FOR RENDER CONSOLE]")
+        print(f" Error:             {e}")
+        print(f" Recipient:         {to_email} ({full_name})")
+        print(f" Verification Link: {verification_url}")
+        print("=" * 65 + "\n")
+        return False, verification_url

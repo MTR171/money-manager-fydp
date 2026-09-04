@@ -271,6 +271,15 @@ const AuthPage = ({ onLogin }) => {
           password: form.password,
           full_name: form.full_name,
         });
+
+        // If server auto-verified the account (dev mode or SMTP fallback)
+        if (res.data?.is_verified && res.data?.access_token && res.data?.user) {
+          localStorage.setItem('access_token', res.data.access_token);
+          localStorage.setItem('user', JSON.stringify(res.data.user));
+          onLogin(res.data.user);
+          return;
+        }
+
         setRegisteredSuccess({
           email: form.email,
           message: res.data?.message || 'Registration successful! Please check your email to verify your account.',
@@ -307,6 +316,23 @@ const AuthPage = ({ onLogin }) => {
     }
   };
 
+  const handleQuickUnlock = async () => {
+    const targetEmail = unverifiedEmail || form.email;
+    if (!targetEmail) return;
+    setResending(true);
+    setResendStatus('');
+    try {
+      const res = await authAPI.quickVerify(targetEmail);
+      setResendStatus(res.data?.message || 'Account verified successfully! You can now sign in.');
+      setError('');
+      setUnverifiedEmail(null);
+    } catch (err) {
+      setResendStatus(err.response?.data?.detail || 'Quick unlock failed.');
+    } finally {
+      setResending(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -336,6 +362,24 @@ const AuthPage = ({ onLogin }) => {
               <p className="text-xs text-gray-500">
                 Click the verification link in your email to activate your account and start managing your finances.
               </p>
+
+              {/* Instant Verification Shortcut for Dev / Local Testing */}
+              {registeredSuccess.verification_link && (
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-left space-y-1 shadow-sm">
+                  <p className="text-xs font-bold text-amber-800 flex items-center gap-1">
+                    <span>⚡ Testing / Dev Instant Link:</span>
+                  </p>
+                  <p className="text-[11px] text-amber-700">
+                    Skip email wait and click directly to activate your account:
+                  </p>
+                  <a
+                    href={registeredSuccess.verification_link}
+                    className="inline-block text-xs font-semibold text-blue-600 hover:text-blue-800 underline break-all mt-1"
+                  >
+                    Click here to verify now &rarr;
+                  </a>
+                </div>
+              )}
 
               {resendStatus && (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-xs">
@@ -394,14 +438,22 @@ const AuthPage = ({ onLogin }) => {
                   <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm space-y-2">
                     <p>{error}</p>
                     {unverifiedEmail && (
-                      <div className="pt-1 border-t border-red-200/60">
+                      <div className="pt-2 border-t border-red-200/60 flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={handleQuickUnlock}
+                          disabled={resending}
+                          className="text-xs font-bold text-emerald-700 hover:text-emerald-800 underline text-left flex items-center gap-1"
+                        >
+                          ⚡ Click here to instantly verify & unlock account
+                        </button>
                         <button
                           type="button"
                           onClick={handleResendFromAuth}
                           disabled={resending}
-                          className="text-xs font-bold text-red-800 underline hover:text-red-900"
+                          className="text-xs font-medium text-red-700 hover:text-red-900 underline text-left"
                         >
-                          {resending ? 'Sending...' : 'Click here to resend verification email'}
+                          {resending ? 'Sending...' : 'Resend verification email'}
                         </button>
                       </div>
                     )}
