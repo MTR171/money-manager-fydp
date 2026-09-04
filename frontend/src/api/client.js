@@ -49,12 +49,12 @@ apiClient.interceptors.response.use(
       const isAuthUrl = 
         originalRequest.url.includes('/api/auth/login') ||
         originalRequest.url.includes('/api/auth/register') ||
-        originalRequest.url.includes('/api/auth/forgot-password');
+        originalRequest.url.includes('/api/auth/forgot-password') ||
+        originalRequest.url.includes('/api/auth/verify-email');
 
       if (!isAuthUrl) {
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
-        // ফ্রন্টএন্ডের স্টেট ক্লিন করে হোম/লগইন পেজে পাঠানো
         window.location.href = '/';
       }
     }
@@ -65,11 +65,13 @@ apiClient.interceptors.response.use(
 
 // ── Auth API ──────────────────────────────────────────────────────────────────
 export const authAPI = {
-  register:        (data) => apiClient.post('/api/auth/register', data),
-  login:           (data) => apiClient.post('/api/auth/login', data),
-  getMe:           ()     => apiClient.get('/api/auth/me'),
-  updateMe:        (data) => apiClient.put('/api/auth/me', data),
-  forgotPassword: (data) => apiClient.post('/api/auth/forgot-password', data),
+  register:           (data)  => apiClient.post('/api/auth/register', data),
+  login:              (data)  => apiClient.post('/api/auth/login', data),
+  verifyEmail:        (token) => apiClient.get('/api/auth/verify-email', { params: { token } }),
+  resendVerification: (email) => apiClient.post('/api/auth/resend-verification', null, { params: { email } }),
+  getMe:              ()      => apiClient.get('/api/auth/me'),
+  updateMe:           (data)  => apiClient.put('/api/auth/me', data),
+  forgotPassword:     (data)  => apiClient.post('/api/auth/forgot-password', data),
 };
 
 // ── Transactions API ──────────────────────────────────────────────────────────

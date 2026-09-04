@@ -1,26 +1,64 @@
-from pydantic import BaseModel, EmailStr, ConfigDict, Field
+from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
 from typing import Optional, Literal, List, Dict, Any
 from datetime import datetime
+import re
+
+
+def validate_password_strength(password: str) -> str:
+    """
+    Enforce strong password rule:
+    - Minimum 8 characters
+    - At least 1 uppercase letter
+    - At least 1 lowercase letter
+    - At least 1 number
+    - At least 1 special character (@$!%*?&#)
+    """
+    if len(password) < 8:
+        raise ValueError("Password must be at least 8 characters long.")
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("Password must contain at least 1 uppercase letter.")
+    if not re.search(r"[a-z]", password):
+        raise ValueError("Password must contain at least 1 lowercase letter.")
+    if not re.search(r"[0-9]", password):
+        raise ValueError("Password must contain at least 1 number.")
+    if not re.search(r"[@$!%*?&#]", password):
+        raise ValueError("Password must contain at least 1 special character (@$!%*?&#).")
+    return password
+
 
 # Auth/User schemas:
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6)
+    password: str
     full_name: str
+
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        return validate_password_strength(v)
+
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+
 class PasswordResetRequest(BaseModel):
     email: EmailStr
-    new_password: str = Field(min_length=6, description="New password (min 6 characters)")
+    new_password: str
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        return validate_password_strength(v)
+
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     monthly_income: Optional[float] = None
     target_savings_goal: Optional[float] = None
     currency: Optional[str] = None
+
 
 class UserOut(BaseModel):
     id: int
@@ -29,14 +67,28 @@ class UserOut(BaseModel):
     monthly_income: float
     target_savings_goal: float
     currency: str
+    is_verified: bool = False
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = 'bearer'
     user: UserOut
+
+
+class RegisterResponse(BaseModel):
+    message: str
+    email: str
+    is_verified: bool = False
+    verification_link: Optional[str] = None
+
+
+class VerifyEmailResponse(BaseModel):
+    status: str
+    message: str
 
 # Transaction schemas:
 class TransactionCreate(BaseModel):

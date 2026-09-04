@@ -10,6 +10,25 @@ from routers import auth_routes, transaction_routes, analytics_routes, goals_rou
 # Base.metadata.create_all emits 'CREATE TABLE IF NOT EXISTS' without altering or dropping existing rows
 Base.metadata.create_all(bind=engine)
 
+
+def ensure_database_schema():
+    """Safely adds newly required columns (is_verified, verification_token) to existing tables without data loss."""
+    from sqlalchemy import inspect, text
+    try:
+        inspector = inspect(engine)
+        if "users" in inspector.get_table_names():
+            columns = [c["name"] for c in inspector.get_columns("users")]
+            with engine.begin() as conn:
+                if "is_verified" not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0"))
+                if "verification_token" not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN verification_token VARCHAR"))
+    except Exception as e:
+        print(f"[Database] Schema auto-migration notice: {e}")
+
+
+ensure_database_schema()
+
 app = FastAPI(
     title="Money Manager API",
     description="AI-powered personal finance management API",

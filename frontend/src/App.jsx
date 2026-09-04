@@ -18,6 +18,53 @@ import BillsView from './components/BillsView';
 import ReportsView from './components/ReportsView';
 import SettingsView from './components/SettingsView';
 import Sidebar, { NAV_ITEMS } from './components/Sidebar';
+import VerifyEmailView from './components/VerifyEmailView';
+
+// ── Password Validation Utilities ──────────────────────────────────────────────
+export const PASSWORD_CRITERIA = [
+  { id: 'length',  label: 'At least 8 characters',                    test: (pw) => (pw || '').length >= 8 },
+  { id: 'upper',   label: 'At least 1 uppercase letter (A-Z)',        test: (pw) => /[A-Z]/.test(pw || '') },
+  { id: 'lower',   label: 'At least 1 lowercase letter (a-z)',        test: (pw) => /[a-z]/.test(pw || '') },
+  { id: 'number',  label: 'At least 1 number (0-9)',                 test: (pw) => /[0-9]/.test(pw || '') },
+  { id: 'special', label: 'At least 1 special character (@$!%*?&#)', test: (pw) => /[@$!%*?&#]/.test(pw || '') },
+];
+
+export const checkPasswordValid = (pw) => {
+  return PASSWORD_CRITERIA.every(criterion => criterion.test(pw || ''));
+};
+
+const PasswordCriteriaList = ({ password }) => {
+  const metCount = PASSWORD_CRITERIA.filter(c => c.test(password || '')).length;
+  const isAllValid = metCount === PASSWORD_CRITERIA.length;
+
+  return (
+    <div className="mt-2.5 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs">
+      <div className="flex items-center justify-between font-semibold text-slate-700 mb-1">
+        <span>Password Requirements:</span>
+        <span className={`text-[11px] ${isAllValid ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+          {metCount} / 5 met
+        </span>
+      </div>
+      {PASSWORD_CRITERIA.map((criterion) => {
+        const met = criterion.test(password || '');
+        return (
+          <div key={criterion.id} className="flex items-center gap-2">
+            <span
+              className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${
+                met ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'
+              }`}
+            >
+              {met ? '✓' : '•'}
+            </span>
+            <span className={`transition-colors ${met ? 'text-emerald-700 font-medium' : 'text-slate-500'}`}>
+              {criterion.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
 // ── Forgot Password Modal ─────────────────────────────────────────────────────
 const ForgotPasswordModal = ({ onClose }) => {
@@ -31,9 +78,16 @@ const ForgotPasswordModal = ({ onClose }) => {
     setError('');
   };
 
+  const isPasswordValid = checkPasswordValid(form.new_password);
+  const passwordsMatch = form.confirm === form.new_password;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.new_password !== form.confirm) {
+    if (!isPasswordValid) {
+      setError('Password must meet all 5 security criteria.');
+      return;
+    }
+    if (!passwordsMatch) {
       setError('Passwords do not match.');
       return;
     }
@@ -63,7 +117,7 @@ const ForgotPasswordModal = ({ onClose }) => {
           <div>
             <p className="text-white font-bold text-base">Reset Password</p>
             <p className="text-blue-200 text-xs mt-0.5">
-              {step === 'form' ? 'Enter your email and choose a new password' : 'All done!'}
+              {step === 'form' ? 'Enter your email and choose a strong password' : 'All done!'}
             </p>
           </div>
           <button
@@ -120,9 +174,10 @@ const ForgotPasswordModal = ({ onClose }) => {
                 </label>
                 <input
                   type="password" name="new_password" value={form.new_password} onChange={handleChange}
-                  placeholder="Min. 6 characters" required minLength={6} autoComplete="new-password"
+                  placeholder="Enter a strong password" required autoComplete="new-password"
                   className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
+                <PasswordCriteriaList password={form.new_password} />
               </div>
 
               <div>
@@ -131,7 +186,7 @@ const ForgotPasswordModal = ({ onClose }) => {
                 </label>
                 <input
                   type="password" name="confirm" value={form.confirm} onChange={handleChange}
-                  placeholder="Re-enter new password" required minLength={6} autoComplete="new-password"
+                  placeholder="Re-enter new password" required autoComplete="new-password"
                   className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${
                     form.confirm && form.confirm !== form.new_password
                       ? 'border-red-300 bg-red-50'
@@ -145,10 +200,10 @@ const ForgotPasswordModal = ({ onClose }) => {
 
               <button
                 type="submit"
-                disabled={loading || (form.confirm && form.confirm !== form.new_password)}
+                disabled={loading || !isPasswordValid || (form.confirm && !passwordsMatch)}
                 className={`w-full py-3 rounded-xl font-bold text-white text-sm transition-all ${
-                  loading || (form.confirm && form.confirm !== form.new_password)
-                    ? 'bg-gray-300 cursor-not-allowed'
+                  loading || !isPasswordValid || (form.confirm && !passwordsMatch)
+                    ? 'bg-gray-300 cursor-not-allowed text-gray-500'
                     : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:scale-[0.98]'
                 }`}
               >
@@ -172,36 +227,83 @@ const ForgotPasswordModal = ({ onClose }) => {
 
 // ── Auth Page ─────────────────────────────────────────────────────────────────
 const AuthPage = ({ onLogin }) => {
-  const [mode, setMode]               = useState('login');
-  const [form, setForm]               = useState({ email: '', password: '', full_name: '' });
-  const [loading, setLoading]         = useState(false);
-  const [error, setError]             = useState('');
-  const [showForgot, setShowForgot]   = useState(false);
+  const [mode, setMode]                           = useState('login');
+  const [form, setForm]                           = useState({ email: '', password: '', full_name: '' });
+  const [loading, setLoading]                     = useState(false);
+  const [error, setError]                         = useState('');
+  const [showForgot, setShowForgot]               = useState(false);
+  const [registeredSuccess, setRegisteredSuccess] = useState(null);
+  const [unverifiedEmail, setUnverifiedEmail]     = useState(null);
+  const [resending, setResending]                 = useState(false);
+  const [resendStatus, setResendStatus]           = useState('');
 
   const handleChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
     setError('');
+    setUnverifiedEmail(null);
+    setResendStatus('');
   };
+
+  const isPasswordValid = checkPasswordValid(form.password);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+    setUnverifiedEmail(null);
+    setResendStatus('');
+
+    if (mode === 'register' && !isPasswordValid) {
+      setError('Password must meet all 5 requirements before creating an account.');
+      return;
+    }
+
+    setLoading(true);
     try {
-      let res;
       if (mode === 'login') {
-        res = await authAPI.login({ email: form.email, password: form.password });
+        const res = await authAPI.login({ email: form.email, password: form.password });
+        const { access_token, user } = res.data;
+        localStorage.setItem('access_token', access_token);
+        localStorage.setItem('user', JSON.stringify(user));
+        onLogin(user);
       } else {
-        res = await authAPI.register({ email: form.email, password: form.password, full_name: form.full_name });
+        const res = await authAPI.register({
+          email: form.email,
+          password: form.password,
+          full_name: form.full_name,
+        });
+        setRegisteredSuccess({
+          email: form.email,
+          message: res.data?.message || 'Registration successful! Please check your email to verify your account.',
+          verification_link: res.data?.verification_link,
+        });
       }
-      const { access_token, user } = res.data;
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('user', JSON.stringify(user));
-      onLogin(user);
     } catch (err) {
-      setError(err.response?.data?.detail || `${mode === 'login' ? 'Login' : 'Registration'} failed. Please try again.`);
+      const status = err.response?.status;
+      const detail = err.response?.data?.detail;
+
+      if (status === 403 || (detail && detail.toLowerCase().includes('verify your email'))) {
+        setUnverifiedEmail(form.email);
+        setError(detail || 'Please verify your email address to log in.');
+      } else {
+        setError(detail || `${mode === 'login' ? 'Login' : 'Registration'} failed. Please try again.`);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendFromAuth = async () => {
+    const targetEmail = unverifiedEmail || registeredSuccess?.email || form.email;
+    if (!targetEmail) return;
+    setResending(true);
+    setResendStatus('');
+    try {
+      const res = await authAPI.resendVerification(targetEmail);
+      setResendStatus(res.data?.message || 'Verification link sent! Please check your inbox.');
+    } catch (err) {
+      setResendStatus(err.response?.data?.detail || 'Failed to resend verification email.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -218,81 +320,169 @@ const AuthPage = ({ onLogin }) => {
         </div>
 
         <div className="bg-white rounded-3xl shadow-2xl p-8">
-          {/* Tab Toggle */}
-          <div className="flex bg-gray-100 rounded-xl p-1 mb-6">
-            {['login', 'register'].map(m => (
-              <button
-                key={m}
-                onClick={() => { setMode(m); setError(''); setForm({ email: '', password: '', full_name: '' }); }}
-                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                  mode === m ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {m === 'login' ? '🔑 Sign In' : '✨ Sign Up'}
-              </button>
-            ))}
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{error}</div>
-            )}
-
-            {mode === 'register' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
-                <input
-                  type="text" name="full_name" value={form.full_name} onChange={handleChange}
-                  placeholder="John Doe" required
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+          {/* If registered successfully, show Verify Notice */}
+          {registeredSuccess ? (
+            <div className="text-center py-4 space-y-4">
+              <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto shadow-inner text-3xl">
+                ✉️
               </div>
-            )}
+              <h2 className="text-2xl font-bold text-gray-800">Check Your Email</h2>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                We've sent an activation link to <br />
+                <span className="font-semibold text-gray-900 bg-gray-100 px-2.5 py-1 rounded-lg text-xs mt-1 inline-block">
+                  {registeredSuccess.email}
+                </span>
+              </p>
+              <p className="text-xs text-gray-500">
+                Click the verification link in your email to activate your account and start managing your finances.
+              </p>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
-              <input
-                type="email" name="email" value={form.email} onChange={handleChange}
-                placeholder="you@example.com" required
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              {resendStatus && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-xs">
+                  {resendStatus}
+                </div>
+              )}
+
+              <div className="pt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegisteredSuccess(null);
+                    setMode('login');
+                    setError('');
+                  }}
+                  className="w-full py-3 rounded-xl font-bold text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all text-sm shadow-md"
+                >
+                  Proceed to Sign In
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleResendFromAuth}
+                  disabled={resending}
+                  className="w-full py-2.5 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  {resending ? 'Sending verification link…' : "Didn't receive email? Resend"}
+                </button>
+              </div>
             </div>
-
-            <div>
-              {/* Password label row — "Forgot password?" sits on the right */}
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-sm font-medium text-gray-700">Password</label>
-                {mode === 'login' && (
+          ) : (
+            <>
+              {/* Tab Toggle */}
+              <div className="flex bg-gray-100 rounded-xl p-1 mb-6">
+                {['login', 'register'].map(m => (
                   <button
-                    type="button"
-                    onClick={() => setShowForgot(true)}
-                    className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline transition-colors"
+                    key={m}
+                    onClick={() => {
+                      setMode(m);
+                      setError('');
+                      setUnverifiedEmail(null);
+                      setResendStatus('');
+                      setForm(prev => ({ ...prev, password: '' }));
+                    }}
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                      mode === m ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                    }`}
                   >
-                    Forgot password?
+                    {m === 'login' ? '🔑 Sign In' : '✨ Sign Up'}
                   </button>
-                )}
+                ))}
               </div>
-              <input
-                type="password" name="password" value={form.password} onChange={handleChange}
-                placeholder="••••••••" required minLength={6}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
 
-            <button
-              type="submit" disabled={loading}
-              className={`w-full py-3 rounded-xl font-bold text-white transition-all text-sm ${
-                loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:scale-[0.98]'
-              }`}
-            >
-              {loading ? 'Please wait...' : mode === 'login' ? '→ Sign In' : '→ Create Account'}
-            </button>
-          </form>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm space-y-2">
+                    <p>{error}</p>
+                    {unverifiedEmail && (
+                      <div className="pt-1 border-t border-red-200/60">
+                        <button
+                          type="button"
+                          onClick={handleResendFromAuth}
+                          disabled={resending}
+                          className="text-xs font-bold text-red-800 underline hover:text-red-900"
+                        >
+                          {resending ? 'Sending...' : 'Click here to resend verification email'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-          {mode === 'login' && (
-            <p className="text-center text-xs text-gray-400 mt-4">
-              Demo: register a new account to get started
-            </p>
+                {resendStatus && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-xs">
+                    {resendStatus}
+                  </div>
+                )}
+
+                {mode === 'register' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
+                    <input
+                      type="text" name="full_name" value={form.full_name} onChange={handleChange}
+                      placeholder="John Doe" required
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+                  <input
+                    type="email" name="email" value={form.email} onChange={handleChange}
+                    placeholder="you@example.com" required
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                </div>
+
+                <div>
+                  {/* Password label row */}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium text-gray-700">Password</label>
+                    {mode === 'login' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowForgot(true)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium hover:underline transition-colors"
+                      >
+                        Forgot password?
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="password" name="password" value={form.password} onChange={handleChange}
+                    placeholder="••••••••" required
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+
+                  {/* Real-time criteria checklist for registration */}
+                  {mode === 'register' && (
+                    <PasswordCriteriaList password={form.password} />
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || (mode === 'register' && !isPasswordValid)}
+                  className={`w-full py-3 rounded-xl font-bold text-white transition-all text-sm ${
+                    loading || (mode === 'register' && !isPasswordValid)
+                      ? 'bg-gray-300 cursor-not-allowed text-gray-500'
+                      : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 active:scale-[0.98]'
+                  }`}
+                >
+                  {loading
+                    ? 'Please wait...'
+                    : mode === 'login'
+                    ? '→ Sign In'
+                    : '→ Create Account'}
+                </button>
+              </form>
+
+              {mode === 'login' && (
+                <p className="text-center text-xs text-gray-400 mt-4">
+                  Demo: register a new account or sign in to get started
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -478,6 +668,12 @@ export default function App() {
   const [user, setUser] = useState(() => {
     try { return JSON.parse(localStorage.getItem('user')); } catch { return null; }
   });
+  const [isVerifying, setIsVerifying] = useState(() => {
+    return (
+      window.location.pathname === '/verify-email' ||
+      window.location.search.includes('token=')
+    );
+  });
   const [activeView, setActiveView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
@@ -574,6 +770,17 @@ export default function App() {
     fetchRecommendations();
     showNotification('Transaction added successfully!');
   };
+
+  if (isVerifying) {
+    return (
+      <VerifyEmailView
+        onProceedToLogin={() => {
+          window.history.replaceState({}, document.title, '/');
+          setIsVerifying(false);
+        }}
+      />
+    );
+  }
 
   if (!user) return <AuthPage onLogin={handleLogin} />;
 
