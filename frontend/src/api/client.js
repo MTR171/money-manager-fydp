@@ -1,34 +1,18 @@
 import axios from 'axios';
 
 // ── Backend URL resolution ────────────────────────────────────────────────────
-//
-// Priority chain:
-//   1. VITE_API_URL in .env  (auto-written by tunnel_runner.py with the
-//      Ngrok public URL before Vite starts — so this is always correct)
-//   2. Same-origin (empty string) — works when backend is proxied via Vite
-//      dev-server (localhost-only development without Ngrok)
-//   3. http://localhost:8000 — last-resort hard fallback
-//
-// When running via tunnel_runner.py:
-//   VITE_API_URL = https://xxxx-xx-xx-xxx-xx.ngrok-free.app
-//   The mobile browser hits this URL directly — no proxy involved.
-//
-// When running locally (npm run dev without tunnel_runner):
-//   VITE_API_URL is unset → falls through to '' → Vite proxy handles /api/*
-// ─────────────────────────────────────────────────────────────────────────────
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||   // set by tunnel_runner.py
-  'http://localhost:8000';           // local fallback
+  import.meta.env.VITE_API_URL || 
+  'http://localhost:8000';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
-    // Bypass Ngrok's browser-interstitial page on free tunnels.
-    // This header is whitelisted by the CORS config in main.py.
     'ngrok-skip-browser-warning': '1',
   },
-  timeout: 15000, // 15 s — Ngrok free tunnels can be slow on first request
+  // Render Free Tier স্লিপ থেকে জাগতে ৫০-৬০ সেকেন্ড লাগতে পারে, তাই Timeout ৬০ সেকেন্ড করা হলো
+  timeout: 60000, 
 });
 
 // ── Request interceptor: attach JWT Bearer token ──────────────────────────────
@@ -43,38 +27,61 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
-// ── Response interceptor: handle 401 globally ─────────────────────────────────
+// ── Response interceptor: handle 401 & Cold-Start Retry globally ─────────────
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      window.location.href = '/';
+  async (error) => {
+    const originalRequest = error.config;
+
+    // ১. Render Cold-Start Handling: প্রথমবার সার্ভার স্লিপে থাকলে আরেকবার অটো-রিট্রাই করবে
+    if (
+      (error.code === 'ECONNABORTED' || error.message.includes('timeout') || !error.response) &&
+      !originalRequest._retry
+    ) {
+      originalRequest._retry = true;
+      console.warn('Backend is waking up (cold start)... Retrying request.');
+      return apiClient(originalRequest);
     }
+
+    // ২. Expired Token Handling: টোকেন নষ্ট বা এক্সপায়ার হলে সেশন রিসেট করা
+    if (error.response?.status === 401) {
+      // লগইন বা রেজিস্ট্রেশন ফর্মে থাকা অবস্থায় পেজ রিডাইরেক্ট আটকানো (যাতে ভুল পাসওয়ার্ড দিলে এরর টেক্সট দেখা যায়)
+      const isAuthUrl = 
+        originalRequest.url.includes('/api/auth/login') ||
+        originalRequest.url.includes('/api/auth/register') ||
+        originalRequest.url.includes('/api/auth/forgot-password');
+
+      if (!isAuthUrl) {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        // ফ্রন্টএন্ডের স্টেট ক্লিন করে হোম/লগইন পেজে পাঠানো
+        window.location.href = '/';
+      }
+    }
+
     return Promise.reject(error);
   },
 );
 
 // ── Auth API ──────────────────────────────────────────────────────────────────
 export const authAPI = {
-  register:       (data) => apiClient.post('/api/auth/register', data),
-  login:          (data) => apiClient.post('/api/auth/login', data),
-  getMe:          ()     => apiClient.get('/api/auth/me'),
-  updateMe:       (data) => apiClient.put('/api/auth/me', data),
+  register:        (data) => apiClient.post('/api/auth/register', data),
+  login:           (data) => apiClient.post('/api/auth/login', data),
+  getMe:           ()     => apiClient.get('/api/auth/me'),
+  updateMe:        (data) => apiClient.put('/api/auth/me', data),
   forgotPassword: (data) => apiClient.post('/api/auth/forgot-password', data),
 };
 
 // ── Transactions API ──────────────────────────────────────────────────────────
 export const transactionsAPI = {
-  create:            (data)         => apiClient.post('/api/transactions/', data),
-  list:              (params)       => apiClient.get('/api/transactions/', { params }),
-  get:               (id)           => apiClient.get(`/api/transactions/${id}`),
-  update:            (id, data)     => apiClient.put(`/api/transactions/${id}`, data),
-  delete:            (id)           => apiClient.delete(`/api/transactions/${id}`),
-  monthlySummary:    (year, month)  => apiClient.get('/api/transactions/summary/monthly', { params: { year, month } }),
+  create:             (data)         => apiClient.post('/api/transactions/', data),
+  list:               (params)       => apiClient.get('/api/transactions/', { params }),
+  get:                (id)           => apiClient.get(`/api/transactions/${id}`),
+  update:             (id, data)     => apiClient.put(`/api/transactions/${id}`, data),
+  delete:             (id)           => apiClient.delete(`/api/transactions/${id}`),
+  monthlySummary:     (year, month)  => apiClient.get('/api/transactions/summary/monthly', { params: { year, month } }),
   categoryBreakdown: (year, month)  => apiClient.get('/api/transactions/summary/category-breakdown', { params: { year, month } }),
-  weeklySummary:     (week_start)   => apiClient.get('/api/transactions/summary/weekly', { params: { week_start } }),
+  weeklySummary:      (week_start)   => apiClient.get('/api/transactions/summary/weekly', { params: { week_start } }),
 };
 
 // ── Analytics API ─────────────────────────────────────────────────────────────
