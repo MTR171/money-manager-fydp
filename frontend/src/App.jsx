@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   LogIn, UserPlus, LogOut, Plus, Settings, LayoutDashboard,
-  List, RefreshCw, Search, X, Save,
+  List, RefreshCw, Search, X, Save, Pencil,
   TrendingUp, DollarSign, Menu, Bell,
   Target, PiggyBank, Receipt, BarChart3, Wallet
 } from 'lucide-react';
@@ -620,8 +620,87 @@ const ProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
   );
 };
 
+// --- Edit Transaction Modal ---
+const CATEGORIES = ['Food/Dining', 'Housing/Rent', 'Transport', 'Entertainment', 'Utilities', 'Healthcare', 'Shopping', 'Other'];
+
+const EditTransactionModal = ({ isOpen, transaction, onClose, onSave, currency }) => {
+  const [form, setForm] = useState({ amount: '', type: 'expense', category: 'Food/Dining', date: '', note: '' });
+  const currencySymbol = { USD: '$', EUR: '€', GBP: '£', BDT: '৳', PKR: '₨' }[currency] || '$';
+
+  useEffect(() => {
+    if (transaction) {
+      setForm({
+        amount: transaction.amount,
+        type: transaction.type,
+        category: transaction.category,
+        date: transaction.date ? transaction.date.slice(0, 10) : '',
+        note: transaction.note || '',
+      });
+    }
+  }, [transaction]);
+
+  if (!isOpen || !transaction) return null;
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(transaction.id, {
+      amount: parseFloat(form.amount),
+      type: form.type,
+      category: form.category,
+      date: new Date(form.date).toISOString(),
+      note: form.note,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-800">Edit Transaction</h2>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg"><X size={18} className="text-gray-500" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Amount ({currencySymbol})</label>
+              <input type="number" step="0.01" min="0.01" required value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Type</label>
+              <select value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Category</label>
+              <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">Date</label>
+              <input type="date" required value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Note (Optional)</label>
+            <input type="text" value={form.note} onChange={e => setForm(p => ({ ...p, note: e.target.value }))} placeholder="Add a note..." className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button type="submit" className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 // --- Transaction History ---
-const TransactionHistory = ({ transactions, loading, onDelete, currency }) => {
+const TransactionHistory = ({ transactions, loading, onDelete, onEdit, currency }) => {
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -634,7 +713,19 @@ const TransactionHistory = ({ transactions, loading, onDelete, currency }) => {
     return matchSearch && matchCat && matchType;
   });
 
-  const CATEGORIES = ['Food/Dining', 'Housing/Rent', 'Transport', 'Entertainment', 'Utilities', 'Healthcare', 'Shopping', 'Other'];
+  const [editingTransaction, setEditingTransaction] = useState(null);
+
+  const CATEGORY_COLORS = {
+    'Food/Dining':    { bg: 'bg-amber-100',  text: 'text-amber-700'  },
+    'Housing/Rent':   { bg: 'bg-blue-100',   text: 'text-blue-700'   },
+    'Transport':      { bg: 'bg-emerald-100',text: 'text-emerald-700'},
+    'Entertainment':  { bg: 'bg-violet-100', text: 'text-violet-700' },
+    'Utilities':      { bg: 'bg-cyan-100',   text: 'text-cyan-700'   },
+    'Healthcare':     { bg: 'bg-red-100',    text: 'text-red-700'    },
+    'Shopping':       { bg: 'bg-orange-100', text: 'text-orange-700' },
+    'Other':          { bg: 'bg-gray-100',   text: 'text-gray-600'   },
+    'Savings/Goal Contribution': { bg: 'bg-purple-100', text: 'text-purple-700' },
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
@@ -680,11 +771,13 @@ const TransactionHistory = ({ transactions, loading, onDelete, currency }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.map(t => (
+              {filtered.map(t => {
+                const catColor = CATEGORY_COLORS[t.category] || { bg: 'bg-gray-100', text: 'text-gray-600' };
+                return (
                 <tr key={t.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-sm text-gray-600">{new Date(t.date).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">{t.category}</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${catColor.bg} ${catColor.text}`}>{t.category}</span>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -695,13 +788,17 @@ const TransactionHistory = ({ transactions, loading, onDelete, currency }) => {
                     {t.type === 'income' ? '+' : '-'}{currencySymbol}{Number(t.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-500 max-w-[200px] truncate">{t.note || '-'}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 flex items-center gap-1">
+                    <button onClick={() => setEditingTransaction(t)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors group" title="Edit">
+                      <Pencil size={14} className="text-gray-400 group-hover:text-blue-500" />
+                    </button>
                     <button onClick={() => onDelete(t.id)} className="p-1.5 hover:bg-red-100 rounded-lg transition-colors group">
                       <X size={14} className="text-gray-400 group-hover:text-red-500" />
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -711,6 +808,13 @@ const TransactionHistory = ({ transactions, loading, onDelete, currency }) => {
           <p className="text-xs text-gray-400">Showing {filtered.length} of {transactions.length} transactions</p>
         </div>
       )}
+      <EditTransactionModal
+        isOpen={!!editingTransaction}
+        transaction={editingTransaction}
+        onClose={() => setEditingTransaction(null)}
+        onSave={(id, data) => { onEdit(id, data); setEditingTransaction(null); }}
+        currency={currency}
+      />
     </div>
   );
 };
@@ -921,6 +1025,17 @@ export default function App() {
               transactions={transactions}
               loading={loadingTransactions}
               onDelete={handleDeleteTransaction}
+              onEdit={async (id, data) => {
+                try {
+                  await transactionsAPI.update(id, data);
+                  fetchTransactions();
+                  fetchDashboard();
+                  fetchRecommendations();
+                  showNotification('Transaction updated!');
+                } catch (err) {
+                  showNotification('Failed to update transaction', 'error');
+                }
+              }}
               currency={user.currency || 'USD'}
             />
           )}
