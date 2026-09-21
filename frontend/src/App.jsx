@@ -1111,6 +1111,20 @@ export default function App() {
 
       {/* PWA — install prompt banner (slides up from bottom) */}
       <InstallBanner />
+      {/* Global FAB — Quick Add Transaction (visible on all views) */}
+      <div className="fixed bottom-6 right-6 z-40 group">
+        <button
+          onClick={() => setShowTransactionModal(true)}
+          className="w-14 h-14 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-full shadow-xl flex items-center justify-center transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300"
+          aria-label="Add Transaction"
+        >
+          <Plus size={26} strokeWidth={2.5} />
+        </button>
+        {/* Hover tooltip */}
+        <span className="absolute bottom-16 right-0 bg-gray-800 text-white text-xs font-medium px-3 py-1.5 rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none shadow-lg">
+          Add Transaction
+        </span>
+      </div>
     </div>
   );
 }
