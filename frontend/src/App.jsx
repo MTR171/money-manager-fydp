@@ -894,7 +894,8 @@ export default function App() {
         )}
 
         {/* Content */}
-        <main className="flex-1 p-4 lg:p-6 space-y-3 overflow-auto">
+        <main className="flex-1 overflow-auto">
+          <div className="w-full max-w-[1550px] mx-auto px-4 md:px-6 py-4 space-y-4">
           {activeView === 'dashboard' && (
             <>
               <DashboardCards
@@ -972,6 +973,7 @@ export default function App() {
               onUpdate={(updated) => { setUser(updated); }}
             />
           )}
+          </div>
         </main>
       </div>
 

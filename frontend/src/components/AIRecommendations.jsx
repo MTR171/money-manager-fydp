@@ -3,7 +3,7 @@ import { Brain, AlertTriangle, Info, CheckCircle, RefreshCw, ChevronDown, Chevro
 
 const TYPE_CONFIG = {
   danger:  { bg: 'bg-red-50',    border: 'border-red-200',    icon: AlertTriangle, iconColor: 'text-red-400',    titleColor: 'text-red-700',    msgColor: 'text-red-600'    },
-  warning: { bg: 'bg-yellow-50', border: 'border-yellow-200', icon: AlertTriangle, iconColor: 'text-yellow-400', titleColor: 'text-yellow-700', msgColor: 'text-yellow-600' },
+  warning: { bg: 'bg-yellow-50', border: 'border-yellow-200', icon: AlertTriangle, iconColor: 'text-yellow-500', titleColor: 'text-yellow-700', msgColor: 'text-yellow-600' },
   info:    { bg: 'bg-blue-50',   border: 'border-blue-200',   icon: Info,          iconColor: 'text-blue-400',   titleColor: 'text-blue-700',   msgColor: 'text-blue-600'   },
 };
 
@@ -14,9 +14,9 @@ const AlertCard = ({ alert }) => {
   };
   const Icon = cfg.icon;
   return (
-    <div className={`px-3 py-2 rounded-lg border ${cfg.bg} ${cfg.border}`}>
+    <div className={`py-2 px-3 rounded-lg border ${cfg.bg} ${cfg.border}`}>
       <div className="flex items-start gap-2">
-        <Icon size={14} className={`${cfg.iconColor} mt-0.5 flex-shrink-0`} />
+        <Icon size={13} className={`${cfg.iconColor} mt-0.5 flex-shrink-0`} />
         <div className="min-w-0">
           <p className={`text-xs font-semibold leading-tight ${cfg.titleColor}`}>{alert.title}</p>
           <p className={`text-xs mt-0.5 leading-snug ${cfg.msgColor}`}>{alert.message}</p>
@@ -27,7 +27,7 @@ const AlertCard = ({ alert }) => {
 };
 
 const TipCard = ({ tip }) => (
-  <div className="flex items-start gap-2 px-3 py-2 bg-emerald-50 rounded-lg border border-emerald-100">
+  <div className="flex items-start gap-2 py-2 px-3 bg-emerald-50 rounded-lg border border-emerald-100">
     <CheckCircle size={13} className="text-emerald-500 mt-0.5 flex-shrink-0" />
     <p className="text-xs text-emerald-800 leading-snug">{tip}</p>
   </div>
@@ -47,10 +47,10 @@ const AIRecommendations = ({ recommendations, onRefresh, loading = false }) => {
   const hasMetrics = Object.keys(budget_metrics).length > 0;
 
   const metricFields = [
-    { key: 'income_ref',             label: 'Income Ref'      },
-    { key: 'total_expense',          label: 'Total Spent'     },
-    { key: 'actual_savings',         label: 'Net Savings'     },
-    { key: 'projected_monthly_spend',label: 'Projected Spend' },
+    { key: 'income_ref',              label: 'Income Ref'       },
+    { key: 'total_expense',           label: 'Total Spent'      },
+    { key: 'actual_savings',          label: 'Net Savings'      },
+    { key: 'projected_monthly_spend', label: 'Projected Spend'  },
   ].filter(({ key }) => budget_metrics[key] !== undefined);
 
   const fmtNum = (v) =>
@@ -59,7 +59,7 @@ const AIRecommendations = ({ recommendations, onRefresh, loading = false }) => {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100">
 
-      {/* ── Compact Header ─────────────────────────────────────────────── */}
+      {/* ── Compact Header ───────────────────────────────────────────── */}
       <div
         className="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none"
         onClick={() => setExpanded(!expanded)}
@@ -87,9 +87,9 @@ const AIRecommendations = ({ recommendations, onRefresh, loading = false }) => {
         </div>
       </div>
 
-      {/* ── Expanded Body ───────────────────────────────────────────────── */}
+      {/* ── Expanded Body ────────────────────────────────────────────── */}
       {expanded && (
-        <div className="px-4 pb-4 space-y-3 border-t border-gray-50">
+        <div className="px-4 pb-6 space-y-3 border-t border-gray-50">
 
           {/* Spending Overview */}
           {hasMetrics && (
@@ -124,27 +124,29 @@ const AIRecommendations = ({ recommendations, onRefresh, loading = false }) => {
 
           {/* Dual-column Alerts + Tips */}
           {(alerts.length > 0 || tips.length > 0) && (
-            <div className={`grid grid-cols-1 gap-3.5 ${alerts.length > 0 && tips.length > 0 ? 'lg:grid-cols-2' : ''}`}>
+            <div className={`grid grid-cols-1 gap-4 ${alerts.length > 0 && tips.length > 0 ? 'lg:grid-cols-2' : ''}`}>
 
+              {/* Active Alerts */}
               {alerts.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
                     Active Alerts
                     <span className="ml-1.5 font-bold text-red-400">({alerts.length})</span>
                   </p>
-                  <div className="max-h-52 overflow-y-auto pr-1 space-y-1.5">
+                  <div className="h-[260px] overflow-y-auto pr-2 space-y-2.5 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
                     {alerts.map((alert, i) => <AlertCard key={i} alert={alert} />)}
                   </div>
                 </div>
               )}
 
+              {/* Actionable Tips */}
               {tips.length > 0 && (
                 <div>
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">
                     Actionable Tips
                     <span className="ml-1.5 font-bold text-emerald-400">({tips.length})</span>
                   </p>
-                  <div className="max-h-52 overflow-y-auto pr-1 space-y-1.5">
+                  <div className="h-[260px] overflow-y-auto pr-2 space-y-2.5 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
                     {tips.map((tip, i) => <TipCard key={i} tip={tip} />)}
                   </div>
                 </div>
@@ -154,7 +156,7 @@ const AIRecommendations = ({ recommendations, onRefresh, loading = false }) => {
 
           {/* Empty state */}
           {!hasData && !loading && (
-            <div className="flex flex-col items-center py-5 text-gray-300">
+            <div className="flex flex-col items-center py-6 text-gray-300">
               <Brain size={28} className="mb-1.5 opacity-40" />
               <p className="text-xs">Add transactions to unlock AI insights</p>
             </div>
@@ -162,7 +164,7 @@ const AIRecommendations = ({ recommendations, onRefresh, loading = false }) => {
 
           {/* Loading state */}
           {loading && (
-            <div className="flex items-center justify-center gap-2 py-3 text-gray-400">
+            <div className="flex items-center justify-center gap-2 py-4 text-gray-400">
               <RefreshCw size={13} className="animate-spin" />
               <span className="text-xs">Analysing your finances…</span>
             </div>
