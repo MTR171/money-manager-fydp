@@ -1,10 +1,12 @@
 import os
 import secrets
+from datetime import datetime, timedelta
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 from database import engine, Base, DATABASE_URL, SessionLocal
-import models
+from models import User, Transaction
 from routers import auth_routes, transaction_routes, analytics_routes, goals_routes, budgets_routes, bills_routes
 
 # ── Non-Destructive Database Schema Verification ──────────────────────────────
