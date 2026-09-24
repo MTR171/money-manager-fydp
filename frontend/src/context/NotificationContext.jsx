@@ -47,6 +47,27 @@ export function NotificationProvider({
     }
   });
 
+  const [alertPrefs, setAlertPrefs] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('mm_alert_prefs') || '{}');
+      return {
+        budgetAlerts:   saved.budgetAlerts   !== false,
+        billReminders:  saved.billReminders  !== false,
+        velocityAlerts: saved.velocityAlerts !== false,
+      };
+    } catch {
+      return { budgetAlerts: true, billReminders: true, velocityAlerts: true };
+    }
+  });
+
+  const updateAlertPrefs = useCallback((patch) => {
+    setAlertPrefs(prev => {
+      const next = { ...prev, ...patch };
+      localStorage.setItem('mm_alert_prefs', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   const toastedRuleIdsRef = useRef(new Set());
   const initialLoadDoneRef = useRef(false);
   const prevOnlineRef = useRef(isOnline);
@@ -169,95 +190,101 @@ export function NotificationProvider({
     const monthKey = `${now.getFullYear()}-${now.getMonth() + 1}`;
 
     // 1. Budget Alerts (80% Warning, 100% Critical)
-    budgetsStatus.forEach(item => {
-      const limit = Number(item.monthly_limit || 0);
-      const spent = Number(item.spent || 0);
-      if (limit <= 0) return;
-      const pct = Math.round((spent / limit) * 100);
+    if (alertPrefs.budgetAlerts !== false) {
+      budgetsStatus.forEach(item => {
+        const limit = Number(item.monthly_limit || 0);
+        const spent = Number(item.spent || 0);
+        if (limit <= 0) return;
+        const pct = Math.round((spent / limit) * 100);
 
-      if (pct >= 100) {
-        list.push({
-          id: `budget_crit_${monthKey}_${item.category}`,
-          severity: 'critical',
-          category: 'Budget',
-          title: `Budget Exceeded: ${item.category}`,
-          message: `You have spent ${pct}% (${fmtAmt(spent, currency)} of ${fmtAmt(limit, currency)}) in ${item.category}.`,
-          timestamp: now.toISOString(),
-          targetView: 'budgets',
-        });
-      } else if (pct >= 80) {
-        list.push({
-          id: `budget_warn_${monthKey}_${item.category}`,
-          severity: 'warning',
-          category: 'Budget',
-          title: `Budget Near Limit: ${item.category}`,
-          message: `${item.category} is at ${pct}% (${fmtAmt(spent, currency)} of ${fmtAmt(limit, currency)} limit).`,
-          timestamp: now.toISOString(),
-          targetView: 'budgets',
-        });
-      }
-    });
+        if (pct >= 100) {
+          list.push({
+            id: `budget_crit_${monthKey}_${item.category}`,
+            severity: 'critical',
+            category: 'Budget',
+            title: `Budget Exceeded: ${item.category}`,
+            message: `You have spent ${pct}% (${fmtAmt(spent, currency)} of ${fmtAmt(limit, currency)}) in ${item.category}.`,
+            timestamp: now.toISOString(),
+            targetView: 'budgets',
+          });
+        } else if (pct >= 80) {
+          list.push({
+            id: `budget_warn_${monthKey}_${item.category}`,
+            severity: 'warning',
+            category: 'Budget',
+            title: `Budget Near Limit: ${item.category}`,
+            message: `${item.category} is at ${pct}% (${fmtAmt(spent, currency)} of ${fmtAmt(limit, currency)} limit).`,
+            timestamp: now.toISOString(),
+            targetView: 'budgets',
+          });
+        }
+      });
+    }
 
     // 2. Bill Reminders (Overdue = Critical, Due within 3 days = Warning)
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    billsList.forEach(bill => {
-      if (bill.is_paid || !bill.due_date) return;
-      const due = new Date(bill.due_date);
-      const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-      const diffDays = Math.round((dueStart - todayStart) / (1000 * 60 * 60 * 24));
+    if (alertPrefs.billReminders !== false) {
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      billsList.forEach(bill => {
+        if (bill.is_paid || !bill.due_date) return;
+        const due = new Date(bill.due_date);
+        const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+        const diffDays = Math.round((dueStart - todayStart) / (1000 * 60 * 60 * 24));
 
-      if (diffDays < 0) {
-        list.push({
-          id: `bill_overdue_${bill.id}_${bill.due_date.slice(0, 10)}`,
-          severity: 'critical',
-          category: 'Bills',
-          title: `Overdue Bill: ${bill.title}`,
-          message: `${fmtAmt(bill.amount, currency)} was due ${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'} ago (${dueStart.toLocaleDateString()}).`,
-          timestamp: now.toISOString(),
-          targetView: 'bills',
-        });
-      } else if (diffDays <= 3) {
-        list.push({
-          id: `bill_due_${bill.id}_${bill.due_date.slice(0, 10)}`,
-          severity: 'warning',
-          category: 'Bills',
-          title: `Upcoming Bill: ${bill.title}`,
-          message: diffDays === 0
-            ? `${fmtAmt(bill.amount, currency)} is due today!`
-            : `${fmtAmt(bill.amount, currency)} is due in ${diffDays} day${diffDays === 1 ? '' : 's'} (${dueStart.toLocaleDateString()}).`,
-          timestamp: now.toISOString(),
-          targetView: 'bills',
-        });
-      }
-    });
+        if (diffDays < 0) {
+          list.push({
+            id: `bill_overdue_${bill.id}_${bill.due_date.slice(0, 10)}`,
+            severity: 'critical',
+            category: 'Bills',
+            title: `Overdue Bill: ${bill.title}`,
+            message: `${fmtAmt(bill.amount, currency)} was due ${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? '' : 's'} ago (${dueStart.toLocaleDateString()}).`,
+            timestamp: now.toISOString(),
+            targetView: 'bills',
+          });
+        } else if (diffDays <= 3) {
+          list.push({
+            id: `bill_due_${bill.id}_${bill.due_date.slice(0, 10)}`,
+            severity: 'warning',
+            category: 'Bills',
+            title: `Upcoming Bill: ${bill.title}`,
+            message: diffDays === 0
+              ? `${fmtAmt(bill.amount, currency)} is due today!`
+              : `${fmtAmt(bill.amount, currency)} is due in ${diffDays} day${diffDays === 1 ? '' : 's'} (${dueStart.toLocaleDateString()}).`,
+            timestamp: now.toISOString(),
+            targetView: 'bills',
+          });
+        }
+      });
+    }
 
     // 3. Spending Velocity Alert (AI projected spend vs income / deficit prediction)
-    const metrics = (recommendations && recommendations.budget_metrics) || {};
-    const projected = Number(metrics.projected_monthly_spend || 0);
-    const incomeRef = Number(metrics.income_ref || (dashboardData && dashboardData.current_month && dashboardData.current_month.total_income) || 0);
-    const netBalance = Number((dashboardData && dashboardData.current_month && dashboardData.current_month.net_balance) || 0);
+    if (alertPrefs.velocityAlerts !== false) {
+      const metrics = (recommendations && recommendations.budget_metrics) || {};
+      const projected = Number(metrics.projected_monthly_spend || 0);
+      const incomeRef = Number(metrics.income_ref || (dashboardData && dashboardData.current_month && dashboardData.current_month.total_income) || 0);
+      const netBalance = Number((dashboardData && dashboardData.current_month && dashboardData.current_month.net_balance) || 0);
 
-    if (incomeRef > 0 && projected > incomeRef) {
-      const deficit = projected - incomeRef;
-      list.push({
-        id: `velocity_deficit_${monthKey}`,
-        severity: netBalance < 0 ? 'critical' : 'warning',
-        category: 'Velocity',
-        title: 'Spending Velocity Alert',
-        message: `At current pace, projected month-end spend (${fmtAmt(projected, currency)}) will exceed income by ${fmtAmt(deficit, currency)}.`,
-        timestamp: now.toISOString(),
-        targetView: 'dashboard',
-      });
-    } else if (netBalance < 0) {
-      list.push({
-        id: `velocity_negative_${monthKey}`,
-        severity: 'critical',
-        category: 'Velocity',
-        title: 'Negative Monthly Balance',
-        message: `Current month expenses exceed income by ${fmtAmt(Math.abs(netBalance), currency)}.`,
-        timestamp: now.toISOString(),
-        targetView: 'dashboard',
-      });
+      if (incomeRef > 0 && projected > incomeRef) {
+        const deficit = projected - incomeRef;
+        list.push({
+          id: `velocity_deficit_${monthKey}`,
+          severity: netBalance < 0 ? 'critical' : 'warning',
+          category: 'Velocity',
+          title: 'Spending Velocity Alert',
+          message: `At current pace, projected month-end spend (${fmtAmt(projected, currency)}) will exceed income by ${fmtAmt(deficit, currency)}.`,
+          timestamp: now.toISOString(),
+          targetView: 'dashboard',
+        });
+      } else if (netBalance < 0) {
+        list.push({
+          id: `velocity_negative_${monthKey}`,
+          severity: 'critical',
+          category: 'Velocity',
+          title: 'Negative Monthly Balance',
+          message: `Current month expenses exceed income by ${fmtAmt(Math.abs(netBalance), currency)}.`,
+          timestamp: now.toISOString(),
+          targetView: 'dashboard',
+        });
+      }
     }
 
     // 4. Offline Persistent Indicator if currently offline
@@ -273,7 +300,7 @@ export function NotificationProvider({
     }
 
     return list;
-  }, [budgetsStatus, billsList, recommendations, dashboardData, isOnline, currency]);
+  }, [budgetsStatus, billsList, recommendations, dashboardData, isOnline, currency, alertPrefs]);
 
   // Fire toast when a NEW critical/warning rule threshold is crossed after initial load
   useEffect(() => {
@@ -363,6 +390,8 @@ export function NotificationProvider({
     dismissToast,
     refreshAlerts,
     onNavigate,
+    alertPrefs,
+    updateAlertPrefs,
   };
 
   return (

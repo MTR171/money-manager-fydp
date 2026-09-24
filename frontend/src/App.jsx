@@ -1317,7 +1317,17 @@ export default function App() {
           {activeView === 'settings' && (
             <SettingsView
               user={user}
-              onUpdate={(updated) => { setUser(updated); }}
+              onUpdate={(updated) => { setUser(updated); fetchDashboard(); fetchRecommendations(); }}
+              onForceSync={async () => {
+                await syncPendingQueue();
+                await Promise.all([fetchDashboard(), fetchTransactions(), fetchRecommendations()]);
+              }}
+              onDataReset={() => {
+                setTransactions([]);
+                fetchDashboard();
+                fetchTransactions();
+                fetchRecommendations();
+              }}
             />
           )}
           </div>
