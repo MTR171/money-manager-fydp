@@ -3,10 +3,10 @@ import { TrendingUp, TrendingDown, DollarSign, PiggyBank, AlertTriangle, CheckCi
 
 const RiskBadge = ({ riskLevel, confidence }) => {
   const config = {
-    Low: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: CheckCircle, dot: 'bg-green-500' },
-    Medium: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200', icon: AlertTriangle, dot: 'bg-yellow-500' },
-    High: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200', icon: AlertTriangle, dot: 'bg-red-500' },
-  }[riskLevel] || { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200', icon: AlertTriangle, dot: 'bg-gray-400' };
+    Low: { bg: 'bg-green-100 dark:bg-green-950/50', text: 'text-green-700 dark:text-green-400', border: 'border-green-200 dark:border-green-800', icon: CheckCircle, dot: 'bg-green-500' },
+    Medium: { bg: 'bg-yellow-100 dark:bg-yellow-950/50', text: 'text-yellow-700 dark:text-yellow-400', border: 'border-yellow-200 dark:border-yellow-800', icon: AlertTriangle, dot: 'bg-yellow-500' },
+    High: { bg: 'bg-red-100 dark:bg-red-950/50', text: 'text-red-700 dark:text-red-400', border: 'border-red-200 dark:border-red-800', icon: AlertTriangle, dot: 'bg-red-500' },
+  }[riskLevel] || { bg: 'bg-gray-100 dark:bg-slate-800', text: 'text-gray-600 dark:text-slate-300', border: 'border-gray-200 dark:border-slate-700', icon: AlertTriangle, dot: 'bg-gray-400' };
   
   const Icon = config.icon;
   
@@ -21,7 +21,7 @@ const RiskBadge = ({ riskLevel, confidence }) => {
 };
 
 const StatCard = ({ title, value, subtitle, icon: Icon, colorClass, trend, prefix = '' }) => (
-  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-all duration-200">
+  <div className="bg-white dark:bg-slate-800/90 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-800 hover:shadow-md transition-all duration-200">
     <div className="flex items-start justify-between mb-4">
       <div className={`p-3 rounded-xl ${colorClass}`}>
         <Icon size={22} className="text-white" />
@@ -33,9 +33,9 @@ const StatCard = ({ title, value, subtitle, icon: Icon, colorClass, trend, prefi
         </span>
       )}
     </div>
-    <p className="text-gray-500 text-sm font-medium mb-1">{title}</p>
-    <p className="text-2xl font-bold text-gray-800">{prefix}{typeof value === 'number' ? value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : value}</p>
-    {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+    <p className="text-gray-500 dark:text-slate-400 text-sm font-medium mb-1">{title}</p>
+    <p className="text-2xl font-bold text-gray-800 dark:text-slate-100">{prefix}{typeof value === 'number' ? value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : value}</p>
+    {subtitle && <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{subtitle}</p>}
   </div>
 );
 

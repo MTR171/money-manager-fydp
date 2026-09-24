@@ -2,15 +2,15 @@ import React, { useState } from 'react';
 import { Brain, AlertTriangle, Info, CheckCircle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 
 const TYPE_CONFIG = {
-  danger:  { bg: 'bg-red-50',    border: 'border-red-200',    icon: AlertTriangle, iconColor: 'text-red-400',    titleColor: 'text-red-700',    msgColor: 'text-red-600'    },
-  warning: { bg: 'bg-yellow-50', border: 'border-yellow-200', icon: AlertTriangle, iconColor: 'text-yellow-500', titleColor: 'text-yellow-700', msgColor: 'text-yellow-600' },
-  info:    { bg: 'bg-blue-50',   border: 'border-blue-200',   icon: Info,          iconColor: 'text-blue-400',   titleColor: 'text-blue-700',   msgColor: 'text-blue-600'   },
+  danger:  { bg: 'bg-red-50 dark:bg-red-950/40',       border: 'border-red-200 dark:border-red-800/60',       icon: AlertTriangle, iconColor: 'text-red-400',    titleColor: 'text-red-700 dark:text-red-300',       msgColor: 'text-red-600 dark:text-red-400'       },
+  warning: { bg: 'bg-yellow-50 dark:bg-amber-950/40',  border: 'border-yellow-200 dark:border-amber-800/60',  icon: AlertTriangle, iconColor: 'text-yellow-500', titleColor: 'text-yellow-700 dark:text-amber-300',  msgColor: 'text-yellow-600 dark:text-amber-400'  },
+  info:    { bg: 'bg-blue-50 dark:bg-blue-950/40',     border: 'border-blue-200 dark:border-blue-800/60',     icon: Info,          iconColor: 'text-blue-400',   titleColor: 'text-blue-700 dark:text-blue-300',     msgColor: 'text-blue-600 dark:text-blue-400'     },
 };
 
 const AlertCard = ({ alert }) => {
   const cfg = TYPE_CONFIG[alert.type] || {
-    bg: 'bg-gray-50', border: 'border-gray-200', icon: Info,
-    iconColor: 'text-gray-400', titleColor: 'text-gray-700', msgColor: 'text-gray-500',
+    bg: 'bg-gray-50 dark:bg-slate-800', border: 'border-gray-200 dark:border-slate-700', icon: Info,
+    iconColor: 'text-gray-400', titleColor: 'text-gray-700 dark:text-slate-200', msgColor: 'text-gray-500 dark:text-slate-400',
   };
   const Icon = cfg.icon;
   return (
@@ -27,16 +27,16 @@ const AlertCard = ({ alert }) => {
 };
 
 const TipCard = ({ tip }) => (
-  <div className="flex items-start gap-2 py-2 px-3 bg-emerald-50 rounded-lg border border-emerald-100">
-    <CheckCircle size={13} className="text-emerald-500 mt-0.5 flex-shrink-0" />
-    <p className="text-xs text-emerald-800 leading-snug">{tip}</p>
+  <div className="flex items-start gap-2 py-2 px-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg border border-emerald-100 dark:border-emerald-800/60">
+    <CheckCircle size={13} className="text-emerald-500 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
+    <p className="text-xs text-emerald-800 dark:text-emerald-200 leading-snug">{tip}</p>
   </div>
 );
 
 const MetricPill = ({ label, value, negative }) => (
-  <div className="bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-100 flex flex-col gap-0.5">
-    <span className="text-[10px] text-gray-400 uppercase tracking-wide">{label}</span>
-    <span className={`text-xs font-semibold ${negative ? 'text-red-600' : 'text-gray-800'}`}>{value}</span>
+  <div className="bg-gray-50 dark:bg-slate-800/80 rounded-lg px-3 py-1.5 border border-gray-100 dark:border-slate-700 flex flex-col gap-0.5">
+    <span className="text-[10px] text-gray-400 dark:text-slate-400 uppercase tracking-wide">{label}</span>
+    <span className={`text-xs font-semibold ${negative ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-slate-100'}`}>{value}</span>
   </div>
 );
 

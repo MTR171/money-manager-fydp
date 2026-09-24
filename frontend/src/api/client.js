@@ -98,6 +98,7 @@ export const analyticsAPI = {
 export const goalsAPI = {
   list:    ()         => apiClient.get('/api/goals/'),
   create:  (data)     => apiClient.post('/api/goals/', data),
+  update:  (id, data) => apiClient.put(`/api/goals/${id}`, data),
   deposit: (id, data) => apiClient.patch(`/api/goals/${id}/deposit`, data),
   delete:  (id)       => apiClient.delete(`/api/goals/${id}`),
 };

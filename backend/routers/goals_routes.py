@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
 from database import get_db
-from schemas import GoalCreate, GoalDeposit, GoalOut
+from schemas import GoalCreate, GoalDeposit, GoalUpdate, GoalOut
 from models import Goal, Transaction
 from auth import get_current_user, User
 
@@ -57,3 +57,17 @@ def delete_goal(goal_id: int, current_user: User = Depends(get_current_user), db
         raise HTTPException(status_code=404, detail='Goal not found')
     db.delete(goal)
     db.commit()
+
+
+@router.put('/{goal_id}', response_model=GoalOut)
+@router.patch('/{goal_id}', response_model=GoalOut)
+def update_goal(goal_id: int, goal_in: GoalUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Update goal title, target amount, deadline, or icon."""
+    goal = db.query(Goal).filter(Goal.id == goal_id, Goal.user_id == current_user.id).first()
+    if not goal:
+        raise HTTPException(status_code=404, detail='Goal not found')
+    for field, value in goal_in.model_dump(exclude_unset=True).items():
+        setattr(goal, field, value)
+    db.commit()
+    db.refresh(goal)
+    return goal

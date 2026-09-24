@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   LogIn, UserPlus, LogOut, Plus, Settings, LayoutDashboard,
   List, RefreshCw, Search, X, Save, Pencil, Download,
-  TrendingUp, DollarSign, Menu, Bell,
+  TrendingUp, DollarSign, Menu, Bell, Sun, Moon, Monitor,
   Target, PiggyBank, Receipt, BarChart3, Wallet
 } from 'lucide-react';
 import { authAPI, transactionsAPI, analyticsAPI } from './api/client';
@@ -745,26 +745,26 @@ const TransactionHistory = ({ transactions, loading, onDelete, onEdit, currency 
   const [editingTransaction, setEditingTransaction] = useState(null);
 
   const CATEGORY_COLORS = {
-    'Food/Dining':               { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200'   },
-    'Housing/Rent':              { bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200'    },
-    'Transport':                 { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-    'Entertainment':             { bg: 'bg-purple-50',  text: 'text-purple-700',  border: 'border-purple-200'  },
-    'Utilities':                 { bg: 'bg-cyan-50',    text: 'text-cyan-700',    border: 'border-cyan-200'    },
-    'Healthcare':                { bg: 'bg-red-50',     text: 'text-red-700',     border: 'border-red-200'     },
-    'Shopping':                  { bg: 'bg-rose-50',    text: 'text-rose-700',    border: 'border-rose-200'    },
-    'Other':                     { bg: 'bg-slate-100',  text: 'text-slate-700',   border: 'border-slate-200'   },
-    'Savings/Goal Contribution': { bg: 'bg-violet-50',  text: 'text-violet-700',  border: 'border-violet-200'  },
+    'Food/Dining':               { bg: 'bg-amber-50 dark:bg-amber-950/50',     text: 'text-amber-700 dark:text-amber-300',     border: 'border-amber-200 dark:border-amber-800/60'     },
+    'Housing/Rent':              { bg: 'bg-blue-50 dark:bg-blue-950/50',       text: 'text-blue-700 dark:text-blue-300',       border: 'border-blue-200 dark:border-blue-800/60'       },
+    'Transport':                 { bg: 'bg-emerald-50 dark:bg-emerald-950/50', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800/60' },
+    'Entertainment':             { bg: 'bg-purple-50 dark:bg-purple-950/50',   text: 'text-purple-700 dark:text-purple-300',   border: 'border-purple-200 dark:border-purple-800/60'   },
+    'Utilities':                 { bg: 'bg-cyan-50 dark:bg-cyan-950/50',       text: 'text-cyan-700 dark:text-cyan-300',       border: 'border-cyan-200 dark:border-cyan-800/60'       },
+    'Healthcare':                { bg: 'bg-red-50 dark:bg-red-950/50',         text: 'text-red-700 dark:text-red-300',         border: 'border-red-200 dark:border-red-800/60'         },
+    'Shopping':                  { bg: 'bg-rose-50 dark:bg-rose-950/50',       text: 'text-rose-700 dark:text-rose-300',       border: 'border-rose-200 dark:border-rose-800/60'       },
+    'Other':                     { bg: 'bg-slate-100 dark:bg-slate-800',       text: 'text-slate-700 dark:text-slate-300',     border: 'border-slate-200 dark:border-slate-700'        },
+    'Savings/Goal Contribution': { bg: 'bg-violet-50 dark:bg-violet-950/50',   text: 'text-violet-700 dark:text-violet-300',   border: 'border-violet-200 dark:border-violet-800/60'   },
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-100">
-      <div className="p-5 border-b border-slate-100">
+    <div className="bg-white dark:bg-slate-800/90 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
+      <div className="p-5 border-b border-slate-100 dark:border-slate-800">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-gray-800">Transaction History</h3>
+          <h3 className="text-lg font-bold text-gray-800 dark:text-slate-100">Transaction History</h3>
           <button
             onClick={handleExportCSV}
             disabled={filtered.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Download size={13} /> Export CSV
           </button>
@@ -806,36 +806,36 @@ const TransactionHistory = ({ transactions, loading, onDelete, onEdit, currency 
           </div>
         ) : (
           <table className="w-full">
-            <thead className="bg-gray-50">
+            <thead className="bg-gray-50 dark:bg-slate-900/60">
               <tr>
                 {['Date', 'Category', 'Type', 'Amount', 'Note', 'Actions'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
               {filtered.map(t => {
-                const catColor = CATEGORY_COLORS[t.category] || { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' };
+                const catColor = CATEGORY_COLORS[t.category] || { bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700' };
                 return (
-                <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 text-sm text-gray-600">{new Date(t.date).toLocaleDateString()}</td>
+                <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors">
+                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-300">{new Date(t.date).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${catColor.bg} ${catColor.text} ${catColor.border}`}>{t.category}</span>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                      t.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      t.type === 'income' ? 'bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-400' : 'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400'
                     }`}>{t.type}</span>
                   </td>
-                  <td className={`px-4 py-3 text-sm font-bold ${t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                  <td className={`px-4 py-3 text-sm font-bold ${t.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     {t.type === 'income' ? '+' : '-'}{currencySymbol}{Number(t.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500 max-w-[200px] truncate">{t.note || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-500 dark:text-slate-400 max-w-[200px] truncate">{t.note || '-'}</td>
                   <td className="px-4 py-3 flex items-center gap-1">
-                    <button onClick={() => setEditingTransaction(t)} className="p-1.5 hover:bg-blue-50 rounded-lg transition-colors group" title="Edit">
+                    <button onClick={() => setEditingTransaction(t)} className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition-colors group" title="Edit">
                       <Pencil size={14} className="text-gray-400 group-hover:text-blue-500" />
                     </button>
-                    <button onClick={() => onDelete(t.id)} className="p-1.5 hover:bg-red-100 rounded-lg transition-colors group">
+                    <button onClick={() => onDelete(t.id)} className="p-1.5 hover:bg-red-100 dark:hover:bg-red-950/50 rounded-lg transition-colors group" title="Delete">
                       <X size={14} className="text-gray-400 group-hover:text-red-500" />
                     </button>
                   </td>
@@ -885,6 +885,33 @@ export default function App() {
   const [loadingRecs, setLoadingRecs] = useState(false);
   const [notification, setNotification] = useState(null);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const appRoot = document.getElementById('root');
+    const applyTheme = (mode) => {
+      const isDark =
+        mode === 'dark' ||
+        (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      if (isDark) {
+        root.classList.add('dark');
+        appRoot?.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+        appRoot?.classList.remove('dark');
+      }
+    };
+    applyTheme(theme);
+    localStorage.setItem('theme', theme);
+
+    if (theme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const listener = () => applyTheme('system');
+      mq.addEventListener('change', listener);
+      return () => mq.removeEventListener('change', listener);
+    }
+  }, [theme]);
 
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type });
@@ -1043,7 +1070,7 @@ export default function App() {
   const navItems = NAV_ITEMS;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 flex transition-colors duration-200">
       {/* Sidebar Component */}
       <Sidebar
         activeView={activeView}
@@ -1057,16 +1084,16 @@ export default function App() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar */}
-        <header className="bg-white border-b border-gray-200 px-4 lg:px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+        <header className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-4 lg:px-6 py-4 flex items-center justify-between sticky top-0 z-20 transition-colors duration-200">
           <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 hover:bg-gray-100 rounded-lg">
-              <Menu size={20} className="text-gray-600" />
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg">
+              <Menu size={20} className="text-gray-600 dark:text-slate-300" />
             </button>
             <div>
-              <h2 className="text-lg font-bold text-gray-800">
+              <h2 className="text-lg font-bold text-gray-800 dark:text-slate-100">
                 {navItems.find(n => n.id === activeView)?.label || 'Dashboard'}
               </h2>
-              <p className="text-xs text-gray-400 hidden sm:block">
+              <p className="text-xs text-gray-400 dark:text-slate-400 hidden sm:block">
                 {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </p>
             </div>
@@ -1074,30 +1101,55 @@ export default function App() {
           <div className="flex items-center gap-2">
             {/* ── Live connectivity / sync pill ── */}
             {syncStatus === 'syncing' ? (
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-blue-50 text-blue-700 border-blue-200 transition-all duration-300">
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 transition-all duration-300">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                 Syncing pending data…
               </span>
             ) : syncStatus === 'synced' ? (
-              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-emerald-50 text-emerald-700 border-emerald-200 transition-all duration-300">
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 transition-all duration-300">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 Synced to cloud
               </span>
             ) : (
               <span className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-300 ${
                 isOnline
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : 'bg-amber-50  text-amber-700  border-amber-200'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                  : 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
               }`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                 {isOnline ? 'Synced to cloud' : 'Offline – Local storage active'}
               </span>
             )}
+
+            {/* ── Theme Changer (Light / Dark / System) ── */}
+            <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+              {[
+                { id: 'light',  icon: Sun,     label: 'Light Mode'  },
+                { id: 'dark',   icon: Moon,    label: 'Dark Mode'   },
+                { id: 'system', icon: Monitor, label: 'System Theme' },
+              ].map(({ id, icon: Icon, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTheme(id)}
+                  title={label}
+                  aria-label={label}
+                  className={`p-1.5 rounded-lg transition-all duration-150 ${
+                    theme === id
+                      ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Icon size={15} />
+                </button>
+              ))}
+            </div>
+
             <button
               onClick={() => { fetchDashboard(); fetchTransactions(); fetchRecommendations(); }}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Refresh"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Refresh"
             >
-              <RefreshCw size={18} className={`text-gray-500 ${loadingDashboard ? 'animate-spin' : ''}`} />
+              <RefreshCw size={18} className={`text-gray-500 dark:text-slate-400 ${loadingDashboard ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={() => setShowTransactionModal(true)}

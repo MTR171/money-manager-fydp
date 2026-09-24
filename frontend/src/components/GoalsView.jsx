@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Calendar, Target } from 'lucide-react';
+import { Plus, Trash2, Calendar, Target, Pencil, X } from 'lucide-react';
 import apiClient from '../api/client';
 
 const fmt = (amount, currency = 'BDT') => {
@@ -11,15 +11,17 @@ const fmt = (amount, currency = 'BDT') => {
 export default function GoalsView({ currency = 'BDT', onGoalDeposit, onSync }) {
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // Modals state
+
+  // Modal visibility
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isDepositOpen, setIsDepositOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const [selectedGoal, setSelectedGoal] = useState(null);
 
   // Form states
   const [createForm, setCreateForm] = useState({ title: '', target_amount: '', current_amount: '0', deadline: '', icon: '🎯' });
   const [depositAmount, setDepositAmount] = useState('');
+  const [editForm, setEditForm] = useState({ title: '', target_amount: '', deadline: '', icon: '' });
 
   const fetchGoals = async () => {
     try {
@@ -33,9 +35,7 @@ export default function GoalsView({ currency = 'BDT', onGoalDeposit, onSync }) {
     }
   };
 
-  useEffect(() => {
-    fetchGoals();
-  }, []);
+  useEffect(() => { fetchGoals(); }, []);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -44,14 +44,40 @@ export default function GoalsView({ currency = 'BDT', onGoalDeposit, onSync }) {
         ...createForm,
         target_amount: Number(createForm.target_amount),
         current_amount: Number(createForm.current_amount) || 0,
-        deadline: createForm.deadline || null
+        deadline: createForm.deadline || null,
       });
       setIsCreateOpen(false);
       setCreateForm({ title: '', target_amount: '', current_amount: '0', deadline: '', icon: '🎯' });
       fetchGoals();
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
+  };
+
+  const openEdit = (goal) => {
+    setSelectedGoal(goal);
+    setEditForm({
+      title: goal.title,
+      target_amount: goal.target_amount,
+      deadline: goal.deadline ? goal.deadline.slice(0, 10) : '',
+      icon: goal.icon,
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleEdit = async (e) => {
+    e.preventDefault();
+    if (!selectedGoal) return;
+    try {
+      const payload = {
+        title: editForm.title,
+        target_amount: Number(editForm.target_amount),
+        icon: editForm.icon,
+        deadline: editForm.deadline ? new Date(editForm.deadline).toISOString() : null,
+      };
+      const res = await apiClient.put(`/api/goals/${selectedGoal.id}`, payload);
+      setGoals(prev => prev.map(g => g.id === selectedGoal.id ? res.data : g));
+      setIsEditOpen(false);
+      setSelectedGoal(null);
+    } catch (err) { console.error(err); }
   };
 
   const handleDeposit = async (e) => {
@@ -64,9 +90,7 @@ export default function GoalsView({ currency = 'BDT', onGoalDeposit, onSync }) {
       await fetchGoals();
       onGoalDeposit?.();
       onSync?.();
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const handleDelete = async (id) => {
@@ -74,9 +98,7 @@ export default function GoalsView({ currency = 'BDT', onGoalDeposit, onSync }) {
     try {
       await apiClient.delete(`/api/goals/${id}`);
       fetchGoals();
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const calculateProgress = (current, target) => {
@@ -87,7 +109,6 @@ export default function GoalsView({ currency = 'BDT', onGoalDeposit, onSync }) {
   const getProgressBarColor = (progress, deadline, current, target) => {
     if (current >= target) return 'bg-green-500';
     if (deadline && new Date(deadline) < new Date()) return 'bg-red-500';
-    if (progress < 75) return 'bg-green-500';
     if (progress >= 75) return 'bg-amber-500';
     return 'bg-green-500';
   };
@@ -101,40 +122,40 @@ export default function GoalsView({ currency = 'BDT', onGoalDeposit, onSync }) {
     return `${days} days left`;
   };
 
+  const inputCls = 'w-full p-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm dark:bg-slate-800 dark:border-slate-600 dark:text-gray-100';
+  const labelCls = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5';
+
   return (
-    <div className="p-6 bg-slate-50 min-h-screen">
+    <div className="bg-slate-50 dark:bg-slate-900 min-h-screen p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-slate-800">Saving Goals</h1>
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Saving Goals</h1>
         <button
           onClick={() => setIsCreateOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm font-semibold"
         >
-          <Plus size={18} /> New Goal
+          <Plus size={16} /> New Goal
         </button>
       </div>
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-white p-6 rounded-2xl shadow-sm animate-pulse">
-              <div className="h-6 bg-slate-200 rounded w-1/3 mb-4"></div>
-              <div className="h-4 bg-slate-200 rounded w-full mb-2"></div>
-              <div className="h-4 bg-slate-200 rounded w-2/3"></div>
+            <div key={i} className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm animate-pulse border border-slate-100 dark:border-slate-700">
+              <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-1/3 mb-4" />
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-full mb-2" />
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-2/3" />
             </div>
           ))}
         </div>
       ) : goals.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm p-12 text-center flex flex-col items-center">
-          <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-12 text-center flex flex-col items-center border border-slate-100 dark:border-slate-700">
+          <div className="w-24 h-24 bg-blue-50 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
             <Target className="w-12 h-12 text-blue-500" />
           </div>
-          <h2 className="text-xl font-semibold text-slate-800 mb-2">No goals yet</h2>
-          <p className="text-slate-500 mb-6">Create your first goal!</p>
-          <button
-            onClick={() => setIsCreateOpen(true)}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Plus size={18} /> Create Goal
+          <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100 mb-2">No goals yet</h2>
+          <p className="text-slate-500 dark:text-slate-400 mb-6">Create your first savings goal!</p>
+          <button onClick={() => setIsCreateOpen(true)} className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-semibold">
+            <Plus size={16} /> Create Goal
           </button>
         </div>
       ) : (
@@ -142,44 +163,48 @@ export default function GoalsView({ currency = 'BDT', onGoalDeposit, onSync }) {
           {goals.map((goal) => {
             const progress = calculateProgress(goal.current_amount, goal.target_amount);
             const colorClass = getProgressBarColor(progress, goal.deadline, goal.current_amount, goal.target_amount);
-            
             return (
-              <div key={goal.id} className="bg-white rounded-2xl shadow-sm p-6 border border-slate-100">
+              <div key={goal.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-6 border border-slate-100 dark:border-slate-700 hover:shadow-md transition-all duration-200">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-3">
                     <span className="text-3xl">{goal.icon}</span>
-                    <h3 className="text-lg font-semibold text-slate-800">{goal.title}</h3>
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">{goal.title}</h3>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5 items-center">
                     <button
                       onClick={() => { setSelectedGoal(goal); setIsDepositOpen(true); }}
-                      className="px-3 py-1 bg-green-50 text-green-600 rounded hover:bg-green-100 text-sm font-medium"
+                      className="px-3 py-1 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/50 text-xs font-semibold border border-green-200 dark:border-green-700"
                     >
                       + Deposit
                     </button>
                     <button
-                      onClick={() => handleDelete(goal.id)}
-                      className="p-1 text-slate-400 hover:text-red-500 rounded"
+                      onClick={() => openEdit(goal)}
+                      className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                      title="Edit goal"
                     >
-                      <Trash2 size={18} />
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(goal.id)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                      title="Delete goal"
+                    >
+                      <Trash2 size={15} />
                     </button>
                   </div>
                 </div>
 
-                <div className="mb-2 flex justify-between text-sm text-slate-600">
+                <div className="mb-2 flex justify-between text-sm text-slate-600 dark:text-slate-400">
                   <span>{fmt(goal.current_amount, currency)} / {fmt(goal.target_amount, currency)} saved</span>
-                  <span className="font-semibold text-slate-800">{progress}%</span>
-                </div>
-                
-                <div className="w-full bg-slate-100 rounded-full h-3 mb-4">
-                  <div
-                    className={`${colorClass} h-3 rounded-full transition-all duration-500`}
-                    style={{ width: `${progress}%` }}
-                  ></div>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">{progress}%</span>
                 </div>
 
-                <div className="flex items-center text-sm text-slate-500 gap-1 mt-4 border-t pt-4">
-                  <Calendar size={14} />
+                <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5 mb-4">
+                  <div className={`${colorClass} h-2.5 rounded-full transition-all duration-500`} style={{ width: `${progress}%` }} />
+                </div>
+
+                <div className="flex items-center text-xs text-slate-500 dark:text-slate-400 gap-1.5 pt-3 border-t border-slate-100 dark:border-slate-700">
+                  <Calendar size={13} />
                   <span>{getDaysUntil(goal.deadline)}</span>
                 </div>
               </div>
@@ -188,55 +213,68 @@ export default function GoalsView({ currency = 'BDT', onGoalDeposit, onSync }) {
         </div>
       )}
 
-      {/* Create Modal */}
+      {/* ── Create Modal ─────────────────────────────────────────────────── */}
       {isCreateOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-xl font-bold mb-4">Create New Goal</h2>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsCreateOpen(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">Create New Goal</h2>
+              <button onClick={() => setIsCreateOpen(false)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"><X size={17} className="text-gray-500" /></button>
+            </div>
             <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Title</label>
-                <input required type="text" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={createForm.title} onChange={e => setCreateForm({...createForm, title: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Target Amount</label>
-                <input required type="number" step="0.01" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={createForm.target_amount} onChange={e => setCreateForm({...createForm, target_amount: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Current Amount (Optional)</label>
-                <input type="number" step="0.01" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={createForm.current_amount} onChange={e => setCreateForm({...createForm, current_amount: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Deadline (Optional)</label>
-                <input type="date" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={createForm.deadline} onChange={e => setCreateForm({...createForm, deadline: e.target.value})} />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Icon (Emoji)</label>
-                <input required type="text" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={createForm.icon} onChange={e => setCreateForm({...createForm, icon: e.target.value})} />
-              </div>
-              <div className="flex gap-2 justify-end mt-6">
-                <button type="button" onClick={() => setIsCreateOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create</button>
+              <div><label className={labelCls}>Title</label><input required type="text" className={inputCls} value={createForm.title} onChange={e => setCreateForm({...createForm, title: e.target.value})} /></div>
+              <div><label className={labelCls}>Target Amount</label><input required type="number" step="0.01" className={inputCls} value={createForm.target_amount} onChange={e => setCreateForm({...createForm, target_amount: e.target.value})} /></div>
+              <div><label className={labelCls}>Starting Amount <span className="text-gray-400">(Optional)</span></label><input type="number" step="0.01" className={inputCls} value={createForm.current_amount} onChange={e => setCreateForm({...createForm, current_amount: e.target.value})} /></div>
+              <div><label className={labelCls}>Deadline <span className="text-gray-400">(Optional)</span></label><input type="date" className={inputCls} value={createForm.deadline} onChange={e => setCreateForm({...createForm, deadline: e.target.value})} /></div>
+              <div><label className={labelCls}>Icon (Emoji)</label><input required type="text" className={inputCls} value={createForm.icon} onChange={e => setCreateForm({...createForm, icon: e.target.value})} /></div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
+                <button type="submit" className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">Create Goal</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Deposit Modal */}
-      {isDepositOpen && selectedGoal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h2 className="text-xl font-bold mb-2">Deposit to {selectedGoal.title}</h2>
-            <p className="text-sm text-slate-500 mb-4">Current progress: {fmt(selectedGoal.current_amount, currency)} / {fmt(selectedGoal.target_amount, currency)}</p>
-            <form onSubmit={handleDeposit}>
-              <div className="mb-6">
-                <label className="block text-sm font-medium mb-1">Amount</label>
-                <input required autoFocus type="number" step="0.01" className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" value={depositAmount} onChange={e => setDepositAmount(e.target.value)} />
+      {/* ── Edit Modal ───────────────────────────────────────────────────── */}
+      {isEditOpen && selectedGoal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsEditOpen(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">Edit Goal</h2>
+              <button onClick={() => setIsEditOpen(false)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"><X size={17} className="text-gray-500" /></button>
+            </div>
+            <form onSubmit={handleEdit} className="space-y-4">
+              <div><label className={labelCls}>Title</label><input required type="text" className={inputCls} value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} /></div>
+              <div><label className={labelCls}>Target Amount</label><input required type="number" step="0.01" className={inputCls} value={editForm.target_amount} onChange={e => setEditForm({...editForm, target_amount: e.target.value})} /></div>
+              <div><label className={labelCls}>Deadline <span className="text-gray-400">(Optional)</span></label><input type="date" className={inputCls} value={editForm.deadline} onChange={e => setEditForm({...editForm, deadline: e.target.value})} /></div>
+              <div><label className={labelCls}>Icon (Emoji)</label><input required type="text" className={inputCls} value={editForm.icon} onChange={e => setEditForm({...editForm, icon: e.target.value})} /></div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setIsEditOpen(false)} className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
+                <button type="submit" className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold">Save Changes</button>
               </div>
-              <div className="flex gap-2 justify-end">
-                <button type="button" onClick={() => setIsDepositOpen(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Deposit</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Deposit Modal ─────────────────────────────────────────────────── */}
+      {isDepositOpen && selectedGoal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={() => setIsDepositOpen(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">Deposit to {selectedGoal.title}</h2>
+              <button onClick={() => setIsDepositOpen(false)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"><X size={17} className="text-gray-500" /></button>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-5">Progress: {fmt(selectedGoal.current_amount, currency)} / {fmt(selectedGoal.target_amount, currency)}</p>
+            <form onSubmit={handleDeposit}>
+              <div className="mb-5">
+                <label className={labelCls}>Amount</label>
+                <input required autoFocus type="number" step="0.01" min="0.01" className={inputCls} value={depositAmount} onChange={e => setDepositAmount(e.target.value)} />
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setIsDepositOpen(false)} className="flex-1 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700">Cancel</button>
+                <button type="submit" className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold">Deposit</button>
               </div>
             </form>
           </div>

@@ -219,6 +219,12 @@ class GoalCreate(BaseModel):
 class GoalDeposit(BaseModel):
     amount: float = Field(gt=0)
 
+class GoalUpdate(BaseModel):
+    title: Optional[str] = None
+    target_amount: Optional[float] = Field(default=None, gt=0)
+    deadline: Optional[datetime] = None
+    icon: Optional[str] = None
+
 class GoalOut(BaseModel):
     id: int
     user_id: int
