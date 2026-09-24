@@ -232,7 +232,7 @@ export default function SettingsView({ user, onUpdate, onForceSync, onDataReset 
 
       const backupPayload = {
         app: 'Money Manager AI',
-        version: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.2.4',
+        version: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.2.6',
         exported_at: new Date().toISOString(),
         user_profile: {
           full_name: profile.full_name,

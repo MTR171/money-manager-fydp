@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
 
     return {
         define: {
-            __APP_VERSION__: JSON.stringify(process.env.npm_package_version || "1.2.4"),
+            __APP_VERSION__: JSON.stringify(process.env.npm_package_version || "1.2.6"),
             __BUILD_DATE__: JSON.stringify(new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })),
         },
         plugins: [
