@@ -1,11 +1,10 @@
 import os
-from datetime import datetime
+import secrets
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from database import engine, Base, DATABASE_URL, SessionLocal
 import models
-from models import User, Transaction
 from routers import auth_routes, transaction_routes, analytics_routes, goals_routes, budgets_routes, bills_routes
 
 # ── Non-Destructive Database Schema Verification ──────────────────────────────
@@ -51,6 +50,10 @@ def ensure_database_schema():
                     conn.execute(text("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT 0"))
                 if "verification_token" not in columns:
                     conn.execute(text("ALTER TABLE users ADD COLUMN verification_token VARCHAR"))
+                if "otp_code" not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN otp_code VARCHAR"))
+                if "otp_expiry" not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN otp_expiry TIMESTAMP"))
 
                 # Unblock target user rifat2305101290@diu.edu.bd immediately
                 conn.execute(text("UPDATE users SET is_verified = 1 WHERE LOWER(email) = 'rifat2305101290@diu.edu.bd'"))
@@ -76,6 +79,8 @@ def ensure_database_schema():
                 is_active=True,
                 is_verified=True,
                 verification_token=None,
+                otp_code=None,
+                otp_expiry=None
             )
             db.add(demo_user)
             db.commit()
@@ -86,6 +91,8 @@ def ensure_database_schema():
                 demo_user.is_verified = True
                 demo_user.is_active = True
                 demo_user.verification_token = None
+                demo_user.otp_code = None
+                demo_user.otp_expiry = None
                 db.commit()
 
         # Seed initial transactions for demo_user if they have none
@@ -114,7 +121,7 @@ ensure_database_schema()
 app = FastAPI(
     title="Money Manager API",
     description="AI-powered personal finance management API",
-    version="1.2.8",
+    version="1.2.9",
 )
 
 # ── CORS Configuration (Open for Multi-Device / Mobile LAN / Tunnel / Cloud) ──
@@ -153,7 +160,7 @@ app.include_router(bills_routes.router)
 @app.get("/")
 def root():
     db_type = "postgresql" if "postgresql" in DATABASE_URL else "sqlite"
-    return {"message": "Money Manager API v1.2.8", "status": "running", "database": db_type}
+    return {"message": "Money Manager API v1.2.9", "status": "running", "database": db_type}
 
 @app.get("/health")
 def health_check():

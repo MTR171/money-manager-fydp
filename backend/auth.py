@@ -1,115 +1,124 @@
 import os
 import secrets
 from datetime import datetime, timedelta
-from typing import Optional
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import func
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
+from schemas import (
+    UserCreate, UserLogin, UserOut, TokenResponse, UserUpdate,
+    PasswordResetRequest, RegisterResponse, VerifyEmailResponse,
+    validate_password_strength
+)
 from models import User
+from auth import get_password_hash, verify_password, create_access_token, get_current_user
+from email_service import send_verification_email, is_smtp_configured, get_verification_url
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except Exception:
-    pass
+router = APIRouter(prefix='/api/auth', tags=['Authentication'])
 
-# ── JWT Secret Configuration ──────────────────────────────────────────────────
-# Reads from environment variable SECRET_KEY, falling back to a deterministic,
-# fixed production key so server reboots/restarts and multi-device logins
-# NEVER invalidate existing user sessions across devices.
-SECRET_KEY = os.getenv("SECRET_KEY") or "moneymanager-secure-fixed-production-jwt-secret-key-2024"
-ALGORITHM = "HS256"
-
-# Default token lifespan: 30 days (43,200 minutes) for seamless multi-device persistence
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "43200"))
-
-# ── Cryptography & OAuth2 ─────────────────────────────────────────────────────
-pwd_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl='/api/auth/login')
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Safely verify plain password against bcrypt hash."""
-    if not plain_password or not hashed_password:
-        return False
+@router.post('/register', response_model=RegisterResponse, status_code=201)
+def register(user_in: UserCreate, db: Session = Depends(get_db)):
+    # Explicit password strength verification (guarantees HTTP 400 on failure)
     try:
-        return pwd_context.verify(plain_password, hashed_password)
-    except Exception as e:
-        print(f"[Auth] Password verification warning: {e}")
-        return False
+        validate_password_strength(user_in.password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
+    norm_email = user_in.email.strip().lower()
+    db_user = db.query(User).filter(
+        (User.email == norm_email) | (User.email == user_in.email)
+    ).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    hashed_pwd = get_password_hash(user_in.password)
+    otp_code = secrets.choice('0123456789') * 6
+    otp_expiry = datetime.utcnow() + timedelta(minutes=5)
 
-def get_password_hash(password: str) -> str:
-    """Generate bcrypt hash from plain password."""
-    return pwd_context.hash(password)
+    new_user = User(
+        email=norm_email,
+        hashed_password=hashed_pwd,
+        full_name=user_in.full_name.strip(),
+        is_verified=False,
+        verification_token=None,
+        otp_code=otp_code,
+        otp_expiry=otp_expiry
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    # Send OTP via email
+    email_sent = send_verification_email(
+        to_email=new_user.email,
+        token=otp_code,
+        full_name=new_user.full_name,
+        subject="Your OTP for Money Manager Account Verification"
+    )
 
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """
-    Create a stateless JWT access token.
-    Includes a unique 'jti' and 'iat' per device login so concurrent sessions
-    across multiple devices remain completely independent and never collide.
-    """
-    to_encode = data.copy()
-    now = datetime.utcnow()
-    if expires_delta:
-        expire = now + expires_delta
-    else:
-        expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({
-        "exp": expire,
-        "iat": int(now.timestamp()),
-        "jti": secrets.token_hex(8),
-    })
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-
-def decode_token(token: str) -> dict:
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError:
+    if not email_sent:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to send OTP via email. Please try again later."
         )
 
-
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
-    """
-    Stateless cryptographic JWT verification.
-    Does not check against any single-session database token column, allowing
-    unlimited concurrent sessions for the same user across desktop, mobile, and tablet.
-    """
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
+    return RegisterResponse(
+        message="Registration successful! Please check your email to verify your account before logging in.",
+        email=new_user.email,
+        is_verified=False,
+        verification_link=None
     )
-    payload = decode_token(token)
-    user_id = payload.get("uid")
-    email: str = payload.get("sub")
 
-    user = None
-    if user_id is not None:
-        try:
-            user = db.query(User).filter(User.id == int(user_id)).first()
-        except (ValueError, TypeError):
-            user = None
+@router.post('/verify-otp', response_model=VerifyEmailResponse)
+def verify_otp(token: str = Query(..., min_length=6), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.otp_code == token).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OTP. Please try again."
+        )
+    
+    if user.otp_expiry < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OTP has expired. Please request a new OTP."
+        )
+    
+    user.is_verified = True
+    user.otp_code = None
+    user.otp_expiry = None
+    db.commit()
 
-    if user is None and email is not None:
-        norm_email = email.strip().lower()
-        user = db.query(User).filter(func.lower(User.email) == norm_email).first()
-        if user is None:
-            user = db.query(User).filter(User.email == email).first()
+    return VerifyEmailResponse(
+        status="success",
+        message="OTP verified successfully! You can now log in to your account."
+    )
 
-    if user is None:
-        raise credentials_exception
-    return user
+@router.post('/forgot-password')
+def forgot_password(payload: PasswordResetRequest, db: Session = Depends(get_db)):
+    try:
+        validate_password_strength(payload.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
+    norm_email = payload.email.strip().lower()
+    user = db.query(User).filter(
+        (User.email == norm_email) | (User.email == payload.email)
+    ).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No account found with that email address."
+        )
+
+    user.hashed_password = get_password_hash(payload.new_password)
+    db.commit()
+
+    # Trigger email notification
+    send_verification_email(
+        to_email=user.email,
+        token=user.email,
+        full_name=user.full_name,
+        subject="Your Password has been Reset"
+    )
+
+    return {"message": "Password reset successfully. You can now log in with your new password."}
