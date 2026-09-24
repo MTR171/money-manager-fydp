@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   LogIn, UserPlus, LogOut, Plus, Settings, LayoutDashboard,
-  List, RefreshCw, Search, X, Save, Pencil,
+  List, RefreshCw, Search, X, Save, Pencil, Download,
   TrendingUp, DollarSign, Menu, Bell,
   Target, PiggyBank, Receipt, BarChart3, Wallet
 } from 'lucide-react';
@@ -18,6 +18,7 @@ import BillsView from './components/BillsView';
 import ReportsView from './components/ReportsView';
 import SettingsView from './components/SettingsView';
 import Sidebar, { NAV_ITEMS } from './components/Sidebar';
+import { enqueue, getQueue, removeFromQueue } from './services/offlineSyncService';
 import VerifyEmailView from './components/VerifyEmailView';
 
 // ── Password Validation Utilities ──────────────────────────────────────────────
@@ -704,14 +705,42 @@ const TransactionHistory = ({ transactions, loading, onDelete, onEdit, currency 
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [filterType, setFilterType] = useState('');
+  const [filterDateRange, setFilterDateRange] = useState('all');
   const currencySymbol = { USD: '$', EUR: '€', GBP: '£', BDT: '৳', PKR: '₨' }[currency] || '$';
 
+  const now = new Date();
   const filtered = transactions.filter(t => {
     const matchSearch = !search || t.note?.toLowerCase().includes(search.toLowerCase()) || t.category.toLowerCase().includes(search.toLowerCase());
-    const matchCat = !filterCat || t.category === filterCat;
-    const matchType = !filterType || t.type === filterType;
-    return matchSearch && matchCat && matchType;
+    const matchCat    = !filterCat  || t.category === filterCat;
+    const matchType   = !filterType || t.type === filterType;
+    let   matchDate   = true;
+    if (filterDateRange === 'this_month') {
+      const d = new Date(t.date);
+      matchDate = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    } else if (filterDateRange === 'last_30') {
+      matchDate = (now - new Date(t.date)) <= 30 * 24 * 60 * 60 * 1000;
+    }
+    return matchSearch && matchCat && matchType && matchDate;
   });
+
+  const handleExportCSV = () => {
+    const headers = ['Date', 'Category', 'Type', 'Amount', 'Note'];
+    const rows = filtered.map(t => [
+      new Date(t.date).toLocaleDateString(),
+      t.category,
+      t.type,
+      t.amount,
+      (t.note || '').replace(/,/g, ' '),
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `transactions_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const [editingTransaction, setEditingTransaction] = useState(null);
 
@@ -728,14 +757,28 @@ const TransactionHistory = ({ transactions, loading, onDelete, onEdit, currency 
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
-      <div className="p-6 border-b border-gray-100">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">Transaction History</h3>
-        <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search..." className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-100">
+      <div className="p-5 border-b border-slate-100">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-gray-800">Transaction History</h3>
+          <button
+            onClick={handleExportCSV}
+            disabled={filtered.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Download size={13} /> Export CSV
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2.5">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search transactions..." className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
+          <select value={filterDateRange} onChange={e => setFilterDateRange(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            <option value="all">All Time</option>
+            <option value="this_month">This Month</option>
+            <option value="last_30">Last 30 Days</option>
+          </select>
           <select value={filterCat} onChange={e => setFilterCat(e.target.value)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
             <option value="">All Categories</option>
             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -745,8 +788,8 @@ const TransactionHistory = ({ transactions, loading, onDelete, onEdit, currency 
             <option value="income">Income</option>
             <option value="expense">Expense</option>
           </select>
-          {(search || filterCat || filterType) && (
-            <button onClick={() => { setSearch(''); setFilterCat(''); setFilterType(''); }} className="px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-1">
+          {(search || filterCat || filterType || filterDateRange !== 'all') && (
+            <button onClick={() => { setSearch(''); setFilterCat(''); setFilterType(''); setFilterDateRange('all'); }} className="px-3 py-2 text-sm text-gray-500 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-1">
               <X size={14} /> Clear
             </button>
           )}
@@ -895,9 +938,44 @@ export default function App() {
     }
   }, [user, fetchDashboard, fetchTransactions, fetchRecommendations]);
 
-  // ── Online / offline status tracking ──────────────────────────────────────
+  // ── Online / offline status + auto-sync queue ─────────────────────────────
+  const [syncStatus, setSyncStatus] = useState(null); // null | 'syncing' | 'synced'
+
+  const syncPendingQueue = useCallback(async () => {
+    const queue = getQueue();
+    if (!queue.length) return;
+    setSyncStatus('syncing');
+    let anyFailed = false;
+    for (const entry of queue) {
+      try {
+        if (entry.op === 'DELETE') {
+          await transactionsAPI.delete(entry.payload.id);
+        } else if (entry.op === 'UPDATE') {
+          await transactionsAPI.update(entry.payload.id, entry.payload.data);
+        } else if (entry.op === 'CREATE') {
+          await transactionsAPI.create(entry.payload);
+        }
+        removeFromQueue(entry.localId);
+      } catch {
+        anyFailed = true;
+      }
+    }
+    if (!anyFailed) {
+      setSyncStatus('synced');
+      fetchDashboard();
+      fetchTransactions();
+      fetchRecommendations();
+      setTimeout(() => setSyncStatus(null), 3000);
+    } else {
+      setSyncStatus(null);
+    }
+  }, [fetchDashboard, fetchTransactions, fetchRecommendations]);
+
   useEffect(() => {
-    const goOnline  = () => setIsOnline(true);
+    const goOnline = () => {
+      setIsOnline(true);
+      syncPendingQueue();
+    };
     const goOffline = () => setIsOnline(false);
     window.addEventListener('online',  goOnline);
     window.addEventListener('offline', goOffline);
@@ -905,7 +983,7 @@ export default function App() {
       window.removeEventListener('online',  goOnline);
       window.removeEventListener('offline', goOffline);
     };
-  }, []);
+  }, [syncPendingQueue]);
 
   const handleLogin = (userData) => {
     setUser(userData);
@@ -922,14 +1000,23 @@ export default function App() {
 
   const handleDeleteTransaction = async (id) => {
     if (!window.confirm('Delete this transaction?')) return;
+    // Optimistic remove from UI immediately
+    setTransactions(prev => prev.filter(t => t.id !== id));
+    if (!navigator.onLine) {
+      enqueue({ op: 'DELETE', payload: { id } });
+      showNotification('Offline – Delete queued for sync');
+      return;
+    }
     try {
       await transactionsAPI.delete(id);
-      setTransactions(prev => prev.filter(t => t.id !== id));
       fetchDashboard();
       fetchRecommendations();
       showNotification('Transaction deleted');
     } catch (err) {
-      showNotification('Failed to delete transaction', 'error');
+      // Network failed mid-request — queue it and restore UI would be complex,
+      // so we notify and let auto-sync pick it up
+      enqueue({ op: 'DELETE', payload: { id } });
+      showNotification('Network error – will retry when online', 'error');
     }
   };
 
@@ -985,15 +1072,27 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* ── Live connectivity pill ── */}
-            <span className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-300 ${
-              isOnline
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-amber-50  text-amber-700  border-amber-200'
-            }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-              {isOnline ? 'All systems synced' : 'Offline – Stored locally'}
-            </span>
+            {/* ── Live connectivity / sync pill ── */}
+            {syncStatus === 'syncing' ? (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-blue-50 text-blue-700 border-blue-200 transition-all duration-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                Syncing pending data…
+              </span>
+            ) : syncStatus === 'synced' ? (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-emerald-50 text-emerald-700 border-emerald-200 transition-all duration-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Synced to cloud
+              </span>
+            ) : (
+              <span className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-300 ${
+                isOnline
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50  text-amber-700  border-amber-200'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                {isOnline ? 'Synced to cloud' : 'Offline – Local storage active'}
+              </span>
+            )}
             <button
               onClick={() => { fetchDashboard(); fetchTransactions(); fetchRecommendations(); }}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Refresh"
@@ -1048,6 +1147,13 @@ export default function App() {
               loading={loadingTransactions}
               onDelete={handleDeleteTransaction}
               onEdit={async (id, data) => {
+                // Optimistic local update
+                setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
+                if (!navigator.onLine) {
+                  enqueue({ op: 'UPDATE', payload: { id, data } });
+                  showNotification('Offline – Edit queued for sync');
+                  return;
+                }
                 try {
                   await transactionsAPI.update(id, data);
                   fetchTransactions();
@@ -1055,7 +1161,8 @@ export default function App() {
                   fetchRecommendations();
                   showNotification('Transaction updated!');
                 } catch (err) {
-                  showNotification('Failed to update transaction', 'error');
+                  enqueue({ op: 'UPDATE', payload: { id, data } });
+                  showNotification('Network error – will retry when online', 'error');
                 }
               }}
               currency={user.currency || 'USD'}
