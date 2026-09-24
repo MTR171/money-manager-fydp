@@ -232,7 +232,7 @@ export default function SettingsView({ user, onUpdate, onForceSync, onDataReset 
 
       const backupPayload = {
         app: 'Money Manager AI',
-        version: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.2.6',
+        version: typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.2.7',
         exported_at: new Date().toISOString(),
         user_profile: {
           full_name: profile.full_name,
@@ -632,7 +632,7 @@ export default function SettingsView({ user, onUpdate, onForceSync, onDataReset 
             <div>
               <p className="text-sm font-semibold text-gray-700 dark:text-slate-100">Money Manager AI</p>
               <p className="text-xs text-gray-400 dark:text-slate-400 mt-0.5">
-                FYDP · FastAPI + React + ML · v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.2.4'} • Stable
+                FYDP · FastAPI + React + ML · v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.2.7'} • Stable
                 {typeof __BUILD_DATE__ !== 'undefined' ? ` (${__BUILD_DATE__})` : ''}
               </p>
             </div>

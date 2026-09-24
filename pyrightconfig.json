@@ -1,8 +1,8 @@
 {
-  "venvPath": "backend",
-  "venv": "venv",
-  "extraPaths": [
-    "backend",
-    "backend/routers"
-  ]
+    "venvPath": "backend",
+    "venv": "venv",
+    "extraPaths": [
+        "backend",
+        "backend/routers"
+    ]
 }

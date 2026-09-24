@@ -69,7 +69,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
         new_user.verification_token = None
         db.commit()
         db.refresh(new_user)
-        access_token = create_access_token(data={"sub": new_user.email})
+        access_token = create_access_token(data={"sub": new_user.email, "uid": new_user.id})
         return RegisterResponse(
             message="Registration successful! Account automatically activated.",
             email=new_user.email,
@@ -211,7 +211,7 @@ def login(user_in: UserLogin, db: Session = Depends(get_db)):
                 detail=f"Please verify your email to log in. Check your inbox or click: {verify_url}"
             )
     
-    access_token = create_access_token(data={"sub": user.email})
+    access_token = create_access_token(data={"sub": user.email, "uid": user.id})
     return {"access_token": access_token, "token_type": "bearer", "user": user}
 
 

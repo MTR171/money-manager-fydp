@@ -28,7 +28,7 @@ engine_kwargs = {
 }
 
 if DATABASE_URL.startswith("sqlite"):
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
+    engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
 else:
     # PostgreSQL connection pool settings for cloud deployments
     engine_kwargs["pool_size"] = int(os.getenv("DB_POOL_SIZE", "10"))

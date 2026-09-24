@@ -7,12 +7,12 @@ export default defineConfig(({ mode }) => {
     // Load .env (including VITE_API_URL written by tunnel_runner.py)
     const env = loadEnv(mode, process.cwd(), '')
 
-    // Only proxy /api when NOT using an external Ngrok backend URL
-    const useProxy = !env.VITE_API_URL
+    // Proxy /api when VITE_API_URL is unset or points to localhost
+    const useProxy = !env.VITE_API_URL || env.VITE_API_URL.includes('localhost') || env.VITE_API_URL.includes('127.0.0.1')
 
     return {
         define: {
-            __APP_VERSION__: JSON.stringify(process.env.npm_package_version || "1.2.6"),
+            __APP_VERSION__: JSON.stringify(process.env.npm_package_version || "1.2.7"),
             __BUILD_DATE__: JSON.stringify(new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })),
         },
         plugins: [

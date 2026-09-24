@@ -42,10 +42,10 @@ ensure_database_schema()
 app = FastAPI(
     title="Money Manager API",
     description="AI-powered personal finance management API",
-    version="1.0.0",
+    version="1.2.7",
 )
 
-# ── CORS Configuration ────────────────────────────────────────────────────────
+# ── CORS Configuration (Relaxed for Multi-Device / LAN / Tunnel / Cloud) ─────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -55,13 +55,15 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# ── Ngrok browser-warning bypass ──────────────────────────────────────────────
+# ── Multi-Device LAN Private Network Access & Ngrok header middleware ────────
 @app.middleware("http")
 async def add_ngrok_header(request: Request, call_next):
-    if request.method == "OPTIONS":
-        return await call_next(request)
     response = await call_next(request)
     response.headers["ngrok-skip-browser-warning"] = "1"
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, X-Requested-With, ngrok-skip-browser-warning"
+    response.headers["Access-Control-Allow-Private-Network"] = "true"
     return response
 
 # ── Routers ───────────────────────────────────────────────────────────────────
@@ -76,7 +78,7 @@ app.include_router(bills_routes.router)
 @app.get("/")
 def root():
     db_type = "postgresql" if "postgresql" in DATABASE_URL else "sqlite"
-    return {"message": "Money Manager API v1.0.0", "status": "running", "database": db_type}
+    return {"message": "Money Manager API v1.2.7", "status": "running", "database": db_type}
 
 @app.get("/health")
 def health_check():

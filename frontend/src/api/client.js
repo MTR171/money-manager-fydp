@@ -1,9 +1,31 @@
 import axios from 'axios';
 
-// ── Backend URL resolution ────────────────────────────────────────────────────
-const API_BASE_URL =
-    import.meta.env.VITE_API_URL ||
-    'http://localhost:8000';
+// ── Backend URL resolution (Multi-Device LAN, Tunnel & Cloud aware) ──────────
+const resolveApiBaseUrl = () => {
+    const envUrl = (import.meta.env.VITE_API_URL || '').trim();
+    const isLocalEnvUrl =
+        !envUrl ||
+        envUrl.includes('localhost') ||
+        envUrl.includes('127.0.0.1');
+
+    if (typeof window !== 'undefined' && window.location) {
+        const host = window.location.hostname;
+        const isClientOnLocalhost = host === 'localhost' || host === '127.0.0.1';
+
+        // If a secondary device (e.g. phone/tablet on Wi-Fi LAN 192.168.x.x) opens the app
+        // while VITE_API_URL is localhost, point to the host machine's IP on port 8000
+        if (!isClientOnLocalhost && isLocalEnvUrl) {
+            if (window.location.protocol === 'https:') {
+                return '';
+            }
+            return `http://${host}:8000`;
+        }
+    }
+
+    return envUrl || 'http://localhost:8000';
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
