@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
 
     return {
         define: {
-            __APP_VERSION__: JSON.stringify(process.env.npm_package_version || "1.2.7"),
+            __APP_VERSION__: JSON.stringify(process.env.npm_package_version || "1.2.8"),
             __BUILD_DATE__: JSON.stringify(new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })),
         },
         plugins: [
@@ -103,12 +103,14 @@ export default defineConfig(({ mode }) => {
 
                     runtimeCaching: [
                         // ── API calls: NetworkFirst with 10-second timeout ──────────
-                        // Serves stale data when offline so the app doesn't break.
+                        // Never cache /api/auth/* requests so multi-device login is always live.
                         {
                             urlPattern: ({ url }) =>
-                                url.pathname.startsWith('/api/') ||
-                                /ngrok-free\.app\/api\//.test(url.href) ||
-                                /ngrok\.io\/api\//.test(url.href),
+                                !url.pathname.startsWith('/api/auth/') && (
+                                    url.pathname.startsWith('/api/') ||
+                                    /ngrok-free\.app\/api\//.test(url.href) ||
+                                    /ngrok\.io\/api\//.test(url.href)
+                                ),
                             handler: 'NetworkFirst',
                             options: {
                                 cacheName: 'api-cache-v1',
@@ -180,11 +182,11 @@ export default defineConfig(({ mode }) => {
         // ── Dev Server ──────────────────────────────────────────────────────────
         server: {
             port: 5173,
-            host: '0.0.0.0', // bind to all interfaces for Ngrok forwarding
+            host: '0.0.0.0', // bind to all interfaces for LAN / Mobile / Ngrok forwarding
             ...(useProxy && {
                 proxy: {
                     '/api': {
-                        target: 'http://localhost:8000',
+                        target: 'http://127.0.0.1:8000',
                         changeOrigin: true,
                         secure: false,
                     },
@@ -196,6 +198,13 @@ export default defineConfig(({ mode }) => {
         preview: {
             port: 4173,
             host: '0.0.0.0',
+            proxy: {
+                '/api': {
+                    target: 'http://127.0.0.1:8000',
+                    changeOrigin: true,
+                    secure: false,
+                },
+            },
         },
     }
 })

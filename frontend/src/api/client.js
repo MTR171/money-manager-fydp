@@ -1,31 +1,52 @@
 import axios from 'axios';
 
-// ── Backend URL resolution (Multi-Device LAN, Tunnel & Cloud aware) ──────────
+// ── Dynamic Backend URL Resolution (Multi-Device LAN, Mobile & Cloud) ─────────
 const resolveApiBaseUrl = () => {
-    const envUrl = (import.meta.env.VITE_API_URL || '').trim();
-    const isLocalEnvUrl =
-        !envUrl ||
+    const envUrl = (
+        import.meta.env.VITE_API_URL || '').trim();
+    const isLoopbackEnv = !envUrl ||
         envUrl.includes('localhost') ||
-        envUrl.includes('127.0.0.1');
+        envUrl.includes('127.0.0.1') ||
+        envUrl.includes('0.0.0.0');
 
-    if (typeof window !== 'undefined' && window.location) {
-        const host = window.location.hostname;
-        const isClientOnLocalhost = host === 'localhost' || host === '127.0.0.1';
-
-        // If a secondary device (e.g. phone/tablet on Wi-Fi LAN 192.168.x.x) opens the app
-        // while VITE_API_URL is localhost, point to the host machine's IP on port 8000
-        if (!isClientOnLocalhost && isLocalEnvUrl) {
-            if (window.location.protocol === 'https:') {
-                return '';
-            }
-            return `http://${host}:8000`;
-        }
+    // 1. If an explicit non-local cloud/tunnel backend URL is configured, use it
+    if (envUrl && !isLoopbackEnv) {
+        return envUrl.replace(/\/+$/, '');
     }
 
-    return envUrl || 'http://localhost:8000';
+    // 2. Dynamically resolve based on current browser hostname
+    if (typeof window !== 'undefined' && window.location) {
+        const protocol = window.location.protocol || 'http:';
+        const hostname = window.location.hostname;
+
+        const isLocalOrLan =
+            hostname === 'localhost' ||
+            hostname === '127.0.0.1' ||
+            hostname.startsWith('192.168.') ||
+            hostname.startsWith('10.') ||
+            /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname) ||
+            hostname.endsWith('.local');
+
+        if (isLocalOrLan) {
+            // Mobile phone on local Wi-Fi (e.g. http://192.168.x.x:5173 or :3000)
+            // targets the host laptop's backend on port 8000 directly
+            return `http://${hostname}:8000`;
+        }
+
+        // Production / preview cloud domain fallback
+        if (import.meta.env.VITE_PROD_API_URL) {
+            return import.meta.env.VITE_PROD_API_URL.replace(/\/+$/, '');
+        }
+        if (protocol === 'https:') {
+            return window.location.origin;
+        }
+        return `${protocol}//${hostname}:8000`;
+    }
+
+    return '';
 };
 
-const API_BASE_URL = resolveApiBaseUrl();
+export const API_BASE_URL = resolveApiBaseUrl();
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
@@ -33,7 +54,6 @@ const apiClient = axios.create({
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': '1',
     },
-    // Render Free Tier স্লিপ থেকে জাগতে ৫০-৬০ সেকেন্ড লাগতে পারে, তাই Timeout ৬০ সেকেন্ড করা হলো
     timeout: 60000,
 });
 
@@ -49,15 +69,35 @@ apiClient.interceptors.request.use(
     (error) => Promise.reject(error),
 );
 
-// ── Response interceptor: handle 401 & Cold-Start Retry globally ─────────────
+// ── Response interceptor: LAN Proxy Fallback, Cold-Start Retry & 401 Handling ─
 apiClient.interceptors.response.use(
     (response) => response,
     async(error) => {
         const originalRequest = error.config;
+        if (!originalRequest) {
+            return Promise.reject(error);
+        }
 
-        // ১. Render Cold-Start Handling: প্রথমবার সার্ভার স্লিপে থাকলে আরেকবার অটো-রিট্রাই করবে
+        // 1. Mobile LAN Firewall Fallback: if direct port 8000 is blocked by Windows Firewall,
+        //    transparently route through the current origin's /api proxy (e.g. Vite port 5173/3000)
         if (
-            (error.code === 'ECONNABORTED' || error.message.includes('timeout') || !error.response) &&
+            !error.response &&
+            !originalRequest._proxyFallback &&
+            typeof window !== 'undefined' &&
+            window.location &&
+            originalRequest.baseURL &&
+            originalRequest.baseURL.includes(':8000') &&
+            window.location.port !== '8000'
+        ) {
+            originalRequest._proxyFallback = true;
+            originalRequest.baseURL = window.location.origin;
+            apiClient.defaults.baseURL = window.location.origin;
+            return apiClient(originalRequest);
+        }
+
+        // 2. Render Cold-Start Handling: প্রথমবার সার্ভার স্লিপে থাকলে আরেকবার অটো-রিট্রাই করবে
+        if (
+            (error.code === 'ECONNABORTED' || (error.message && error.message.includes('timeout')) || !error.response) &&
             !originalRequest._retry
         ) {
             originalRequest._retry = true;
