@@ -138,6 +138,31 @@ def create_transaction(
     return new_trans
 
 
+@router.post('/batch', response_model=List[TransactionOut], status_code=201)
+def create_transactions_batch(
+    items: List[TransactionCreate],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    created: List[Transaction] = []
+    for trans_in in items:
+        note_val = trans_in.note if trans_in.note is not None else trans_in.description
+        new_trans = Transaction(
+            user_id=current_user.id,
+            amount=trans_in.amount,
+            type=trans_in.type,
+            category=trans_in.category,
+            date=trans_in.date,
+            note=note_val
+        )
+        db.add(new_trans)
+        created.append(new_trans)
+    db.commit()
+    for t in created:
+        db.refresh(t)
+    return created
+
+
 @router.get('/', response_model=List[TransactionOut])
 def list_transactions(
     start_date: Optional[str] = None,

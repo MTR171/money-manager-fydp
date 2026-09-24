@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   LogIn, UserPlus, LogOut, Plus, Settings, LayoutDashboard,
-  List, RefreshCw, Search, X, Save, Pencil, Download,
+  List, RefreshCw, Search, X, Save, Pencil, Download, Upload,
   TrendingUp, DollarSign, Menu, Bell, Sun, Moon, Monitor,
   Target, PiggyBank, Receipt, BarChart3, Wallet
 } from 'lucide-react';
@@ -9,6 +9,7 @@ import { authAPI, transactionsAPI, analyticsAPI } from './api/client';
 import DashboardCards from './components/DashboardCards';
 import ExpenseCharts from './components/ExpenseCharts';
 import TransactionModal from './components/TransactionModal';
+import ImportTransactionsModal from './components/ImportTransactionsModal';
 import AIRecommendations from './components/AIRecommendations';
 import InstallBanner from './components/InstallBanner';
 import OfflineBar from './components/OfflineBar';
@@ -701,11 +702,12 @@ const EditTransactionModal = ({ isOpen, transaction, onClose, onSave, currency }
 };
 
 // --- Transaction History ---
-const TransactionHistory = ({ transactions, loading, onDelete, onEdit, currency }) => {
+const TransactionHistory = ({ transactions, loading, onDelete, onEdit, onImport, currency }) => {
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterDateRange, setFilterDateRange] = useState('all');
+  const [showImportModal, setShowImportModal] = useState(false);
   const currencySymbol = { USD: '$', EUR: '€', GBP: '£', BDT: '৳', PKR: '₨' }[currency] || '$';
 
   const now = new Date();
@@ -759,15 +761,23 @@ const TransactionHistory = ({ transactions, loading, onDelete, onEdit, currency 
   return (
     <div className="bg-white dark:bg-slate-800/90 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800">
       <div className="p-5 border-b border-slate-100 dark:border-slate-800">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
           <h3 className="text-lg font-bold text-gray-800 dark:text-slate-100">Transaction History</h3>
-          <button
-            onClick={handleExportCSV}
-            disabled={filtered.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Download size={13} /> Export CSV
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-950/80 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors"
+            >
+              <Upload size={13} /> Import Transactions
+            </button>
+            <button
+              onClick={handleExportCSV}
+              disabled={filtered.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Download size={13} /> Export CSV
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2.5">
           <div className="relative flex-1 min-w-[180px]">
@@ -856,6 +866,12 @@ const TransactionHistory = ({ transactions, loading, onDelete, onEdit, currency 
         transaction={editingTransaction}
         onClose={() => setEditingTransaction(null)}
         onSave={(id, data) => { onEdit(id, data); setEditingTransaction(null); }}
+        currency={currency}
+      />
+      <ImportTransactionsModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onCommit={onImport}
         currency={currency}
       />
     </div>
@@ -1216,6 +1232,28 @@ export default function App() {
                   enqueue({ op: 'UPDATE', payload: { id, data } });
                   showNotification('Network error – will retry when online', 'error');
                 }
+              }}
+              onImport={async (payloads) => {
+                if (!navigator.onLine) {
+                  payloads.forEach(item => enqueue({ op: 'CREATE', payload: item }));
+                  setTransactions(prev => [
+                    ...payloads.map((item, idx) => ({ id: `local_${Date.now()}_${idx}`, ...item })),
+                    ...prev,
+                  ]);
+                  showNotification(`Offline – ${payloads.length} transaction(s) queued for sync`);
+                  return;
+                }
+                try {
+                  await transactionsAPI.batchCreate(payloads);
+                } catch {
+                  for (const item of payloads) {
+                    await transactionsAPI.create(item);
+                  }
+                }
+                fetchTransactions();
+                fetchDashboard();
+                fetchRecommendations();
+                showNotification(`Imported ${payloads.length} transaction${payloads.length === 1 ? '' : 's'} successfully!`);
               }}
               currency={user.currency || 'USD'}
             />
