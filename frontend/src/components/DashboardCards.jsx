@@ -21,7 +21,7 @@ const RiskBadge = ({ riskLevel, confidence }) => {
 };
 
 const StatCard = ({ title, value, subtitle, icon: Icon, colorClass, trend, prefix = '' }) => (
-  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+  <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-all duration-200">
     <div className="flex items-start justify-between mb-4">
       <div className={`p-3 rounded-xl ${colorClass}`}>
         <Icon size={22} className="text-white" />

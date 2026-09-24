@@ -69,7 +69,7 @@ const ExpenseCharts = ({ categoryBreakdown = [], weeklyTrend = [], monthlyIncome
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       {/* Expense Breakdown Pie Chart */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-all duration-200">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
             <PieChartIcon size={20} className="text-blue-500" />
@@ -113,7 +113,7 @@ const ExpenseCharts = ({ categoryBreakdown = [], weeklyTrend = [], monthlyIncome
       </div>
 
       {/* Weekly Spending vs Budget */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md transition-all duration-200">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
             <BarChart2 size={20} className="text-purple-500" />

@@ -716,15 +716,15 @@ const TransactionHistory = ({ transactions, loading, onDelete, onEdit, currency 
   const [editingTransaction, setEditingTransaction] = useState(null);
 
   const CATEGORY_COLORS = {
-    'Food/Dining':    { bg: 'bg-amber-100',  text: 'text-amber-700'  },
-    'Housing/Rent':   { bg: 'bg-blue-100',   text: 'text-blue-700'   },
-    'Transport':      { bg: 'bg-emerald-100',text: 'text-emerald-700'},
-    'Entertainment':  { bg: 'bg-violet-100', text: 'text-violet-700' },
-    'Utilities':      { bg: 'bg-cyan-100',   text: 'text-cyan-700'   },
-    'Healthcare':     { bg: 'bg-red-100',    text: 'text-red-700'    },
-    'Shopping':       { bg: 'bg-orange-100', text: 'text-orange-700' },
-    'Other':          { bg: 'bg-gray-100',   text: 'text-gray-600'   },
-    'Savings/Goal Contribution': { bg: 'bg-purple-100', text: 'text-purple-700' },
+    'Food/Dining':               { bg: 'bg-amber-50',   text: 'text-amber-700',   border: 'border-amber-200'   },
+    'Housing/Rent':              { bg: 'bg-blue-50',    text: 'text-blue-700',    border: 'border-blue-200'    },
+    'Transport':                 { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+    'Entertainment':             { bg: 'bg-purple-50',  text: 'text-purple-700',  border: 'border-purple-200'  },
+    'Utilities':                 { bg: 'bg-cyan-50',    text: 'text-cyan-700',    border: 'border-cyan-200'    },
+    'Healthcare':                { bg: 'bg-red-50',     text: 'text-red-700',     border: 'border-red-200'     },
+    'Shopping':                  { bg: 'bg-rose-50',    text: 'text-rose-700',    border: 'border-rose-200'    },
+    'Other':                     { bg: 'bg-slate-100',  text: 'text-slate-700',   border: 'border-slate-200'   },
+    'Savings/Goal Contribution': { bg: 'bg-violet-50',  text: 'text-violet-700',  border: 'border-violet-200'  },
   };
 
   return (
@@ -772,12 +772,12 @@ const TransactionHistory = ({ transactions, loading, onDelete, onEdit, currency 
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map(t => {
-                const catColor = CATEGORY_COLORS[t.category] || { bg: 'bg-gray-100', text: 'text-gray-600' };
+                const catColor = CATEGORY_COLORS[t.category] || { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' };
                 return (
                 <tr key={t.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3 text-sm text-gray-600">{new Date(t.date).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${catColor.bg} ${catColor.text}`}>{t.category}</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${catColor.bg} ${catColor.text} ${catColor.border}`}>{t.category}</span>
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
@@ -841,6 +841,7 @@ export default function App() {
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [loadingRecs, setLoadingRecs] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
 
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type });
@@ -893,6 +894,18 @@ export default function App() {
       fetchRecommendations();
     }
   }, [user, fetchDashboard, fetchTransactions, fetchRecommendations]);
+
+  // ── Online / offline status tracking ──────────────────────────────────────
+  useEffect(() => {
+    const goOnline  = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online',  goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online',  goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
 
   const handleLogin = (userData) => {
     setUser(userData);
@@ -972,6 +985,15 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* ── Live connectivity pill ── */}
+            <span className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-300 ${
+              isOnline
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-amber-50  text-amber-700  border-amber-200'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+              {isOnline ? 'All systems synced' : 'Offline – Stored locally'}
+            </span>
             <button
               onClick={() => { fetchDashboard(); fetchTransactions(); fetchRecommendations(); }}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors" title="Refresh"
