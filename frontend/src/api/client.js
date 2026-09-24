@@ -34,7 +34,8 @@ const resolveApiBaseUrl = () => {
         }
 
         // Production / preview cloud domain fallback
-        if (import.meta.env.VITE_PROD_API_URL) {
+        if (
+            import.meta.env.VITE_PROD_API_URL) {
             return import.meta.env.VITE_PROD_API_URL.replace(/\/+$/, '');
         }
         if (protocol === 'https:') {
@@ -80,8 +81,7 @@ apiClient.interceptors.response.use(
 
         // 1. Mobile LAN Firewall Fallback: if direct port 8000 is blocked by Windows Firewall,
         //    transparently route through the current origin's /api proxy (e.g. Vite port 5173/3000)
-        if (
-            !error.response &&
+        if (!error.response &&
             !originalRequest._proxyFallback &&
             typeof window !== 'undefined' &&
             window.location &&

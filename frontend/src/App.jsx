@@ -894,9 +894,15 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [dashboardData, setDashboardData] = useState(null);
-  const [recommendations, setRecommendations] = useState(null);
-  const [transactions, setTransactions] = useState([]);
+  const [dashboardData, setDashboardData] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mm_cache_dashboard')); } catch { return null; }
+  });
+  const [recommendations, setRecommendations] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mm_cache_recommendations')); } catch { return null; }
+  });
+  const [transactions, setTransactions] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mm_cache_transactions')) || []; } catch { return []; }
+  });
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [loadingRecs, setLoadingRecs] = useState(false);
@@ -913,10 +919,10 @@ export default function App() {
         (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
       if (isDark) {
         root.classList.add('dark');
-        appRoot?.classList.add('dark');
+        if (appRoot) appRoot.classList.add('dark');
       } else {
         root.classList.remove('dark');
-        appRoot?.classList.remove('dark');
+        if (appRoot) appRoot.classList.remove('dark');
       }
     };
     applyTheme(theme);
@@ -941,7 +947,10 @@ export default function App() {
     try {
       const res = await analyticsAPI.getDashboard();
       setDashboardData(res.data);
+      localStorage.setItem('mm_cache_dashboard', JSON.stringify(res.data));
+      setIsOnline(true);
     } catch (err) {
+      if (!err.response) setIsOnline(false);
       console.error('Dashboard fetch error:', err);
     } finally {
       setLoadingDashboard(false);
@@ -954,7 +963,10 @@ export default function App() {
     try {
       const res = await transactionsAPI.list({ limit: 200 });
       setTransactions(res.data);
+      localStorage.setItem('mm_cache_transactions', JSON.stringify(res.data));
+      setIsOnline(true);
     } catch (err) {
+      if (!err.response) setIsOnline(false);
       console.error('Transactions fetch error:', err);
     } finally {
       setLoadingTransactions(false);
@@ -967,7 +979,10 @@ export default function App() {
     try {
       const res = await analyticsAPI.getRecommendations();
       setRecommendations(res.data);
+      localStorage.setItem('mm_cache_recommendations', JSON.stringify(res.data));
+      setIsOnline(true);
     } catch (err) {
+      if (!err.response) setIsOnline(false);
       console.error('Recommendations fetch error:', err);
     } finally {
       setLoadingRecs(false);
@@ -1036,6 +1051,9 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
+    localStorage.removeItem('mm_cache_dashboard');
+    localStorage.removeItem('mm_cache_transactions');
+    localStorage.removeItem('mm_cache_recommendations');
     setUser(null);
     setDashboardData(null);
     setTransactions([]);
@@ -1045,7 +1063,11 @@ export default function App() {
   const handleDeleteTransaction = async (id) => {
     if (!window.confirm('Delete this transaction?')) return;
     // Optimistic remove from UI immediately
-    setTransactions(prev => prev.filter(t => t.id !== id));
+    setTransactions(prev => {
+      const updated = prev.filter(t => t.id !== id);
+      localStorage.setItem('mm_cache_transactions', JSON.stringify(updated));
+      return updated;
+    });
     if (!navigator.onLine) {
       enqueue({ op: 'DELETE', payload: { id } });
       showNotification('Offline – Delete queued for sync');
@@ -1057,14 +1079,42 @@ export default function App() {
       fetchRecommendations();
       showNotification('Transaction deleted');
     } catch (err) {
-      // Network failed mid-request — queue it and restore UI would be complex,
-      // so we notify and let auto-sync pick it up
+      setIsOnline(false);
       enqueue({ op: 'DELETE', payload: { id } });
-      showNotification('Network error – will retry when online', 'error');
+      showNotification('Offline – Delete saved locally & queued for sync');
     }
   };
 
-  const handleTransactionSuccess = () => {
+  const handleTransactionSuccess = (offlineTx, wasOffline) => {
+    if (wasOffline && offlineTx) {
+      setIsOnline(false);
+      setTransactions(prev => {
+        const updated = [offlineTx, ...prev];
+        localStorage.setItem('mm_cache_transactions', JSON.stringify(updated));
+        return updated;
+      });
+      setDashboardData(prev => {
+        if (!prev || !prev.current_month) return prev;
+        const deltaIncome = offlineTx.type === 'income' ? Number(offlineTx.amount || 0) : 0;
+        const deltaExpense = offlineTx.type === 'expense' ? Number(offlineTx.amount || 0) : 0;
+        const nextTotalIncome = Number(prev.current_month.total_income || 0) + deltaIncome;
+        const nextTotalExpense = Number(prev.current_month.total_expense || 0) + deltaExpense;
+        const updatedDash = {
+          ...prev,
+          current_month: {
+            ...prev.current_month,
+            total_income: nextTotalIncome,
+            total_expense: nextTotalExpense,
+            net_savings: nextTotalIncome - nextTotalExpense,
+            transaction_count: Number(prev.current_month.transaction_count || 0) + 1,
+          },
+        };
+        localStorage.setItem('mm_cache_dashboard', JSON.stringify(updatedDash));
+        return updatedDash;
+      });
+      showNotification('Offline – Saved locally & queued for sync!');
+      return;
+    }
     fetchDashboard();
     fetchTransactions();
     fetchRecommendations();

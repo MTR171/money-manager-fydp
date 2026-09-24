@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Plus, DollarSign } from 'lucide-react';
 import { transactionsAPI } from '../api/client';
+import { enqueue } from '../services/offlineSyncService';
 
 const CATEGORIES = ['Food/Dining', 'Housing/Rent', 'Transport', 'Entertainment', 'Utilities', 'Healthcare', 'Shopping', 'Other'];
 
@@ -30,20 +31,46 @@ const TransactionModal = ({ isOpen, onClose, onSuccess, currency = 'USD' }) => {
       return;
     }
     setLoading(true);
-    try {
-      const payload = {
-        amount: parseFloat(form.amount),
-        type: form.type,
-        category: form.category,
-        date: new Date(form.date).toISOString(),
-        note: form.note || null,
+    const payload = {
+      amount: parseFloat(form.amount),
+      type: form.type,
+      category: form.category,
+      date: new Date(form.date).toISOString(),
+      note: form.note || null,
+    };
+
+    const saveOffline = () => {
+      const entry = enqueue({ op: 'CREATE', payload });
+      const offlineTx = {
+        id: entry.localId,
+        ...payload,
+        created_at: new Date().toISOString(),
+        _offline: true,
       };
+      setForm({ amount: '', type: 'expense', category: 'Food/Dining', date: new Date().toISOString().split('T')[0], note: '' });
+      if (onSuccess) onSuccess(offlineTx, true);
+      onClose();
+    };
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setLoading(false);
+      saveOffline();
+      return;
+    }
+
+    try {
       await transactionsAPI.create(payload);
       setForm({ amount: '', type: 'expense', category: 'Food/Dining', date: new Date().toISOString().split('T')[0], note: '' });
-      onSuccess?.();
+      if (onSuccess) onSuccess(null, false);
       onClose();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to add transaction. Please try again.');
+      // If network/server is unreachable (offline), save to local queue instead of failing
+      if (!err.response) {
+        saveOffline();
+      } else {
+        const detail = err.response && err.response.data && err.response.data.detail;
+        setError(detail || 'Failed to add transaction. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
