@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, Plus, DollarSign } from 'lucide-react';
-import { transactionsAPI } from '../api/client';
-import { enqueue } from '../services/offlineSyncService';
+import { X, Plus } from 'lucide-react';
+import { transactionsAPI, updateCachedTransactions, updateCachedDashboard } from '../api/client';
+import { enqueue, isEffectivelyOffline } from '../services/offlineSyncService';
 
 const CATEGORIES = ['Food/Dining', 'Housing/Rent', 'Transport', 'Entertainment', 'Utilities', 'Healthcare', 'Shopping', 'Other'];
 
@@ -24,13 +24,32 @@ const TransactionModal = ({ isOpen, onClose, onSuccess, currency = 'USD' }) => {
     if (error) setError('');
   };
 
+  const saveOffline = (payload) => {
+    const entry = enqueue({ op: 'CREATE', payload });
+    const optimisticTx = {
+      id: entry.localId,
+      amount: payload.amount,
+      type: payload.type,
+      category: payload.category,
+      date: payload.date,
+      note: payload.note || '',
+      _offlinePending: true,
+    };
+    updateCachedTransactions(list => [optimisticTx, ...list]);
+    updateCachedDashboard(optimisticTx, 1);
+    setForm({ amount: '', type: 'expense', category: 'Food/Dining', date: new Date().toISOString().split('T')[0], note: '' });
+    if (onSuccess) {
+      onSuccess({ offline: true, transaction: optimisticTx });
+    }
+    onClose();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.amount || parseFloat(form.amount) <= 0) {
       setError('Please enter a valid amount greater than 0');
       return;
     }
-    setLoading(true);
     const payload = {
       amount: parseFloat(form.amount),
       type: form.type,
@@ -39,34 +58,22 @@ const TransactionModal = ({ isOpen, onClose, onSuccess, currency = 'USD' }) => {
       note: form.note || null,
     };
 
-    const saveOffline = () => {
-      const entry = enqueue({ op: 'CREATE', payload });
-      const offlineTx = {
-        id: entry.localId,
-        ...payload,
-        created_at: new Date().toISOString(),
-        _offline: true,
-      };
-      setForm({ amount: '', type: 'expense', category: 'Food/Dining', date: new Date().toISOString().split('T')[0], note: '' });
-      if (onSuccess) onSuccess(offlineTx, true);
-      onClose();
-    };
-
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      setLoading(false);
-      saveOffline();
+    if (isEffectivelyOffline()) {
+      saveOffline(payload);
       return;
     }
 
+    setLoading(true);
     try {
       await transactionsAPI.create(payload);
       setForm({ amount: '', type: 'expense', category: 'Food/Dining', date: new Date().toISOString().split('T')[0], note: '' });
-      if (onSuccess) onSuccess(null, false);
+      if (onSuccess) {
+        onSuccess({ offline: false });
+      }
       onClose();
     } catch (err) {
-      // If network/server is unreachable (offline), save to local queue instead of failing
-      if (!err.response) {
-        saveOffline();
+      if (!err || !err.response || err.isOfflineError) {
+        saveOffline(payload);
       } else {
         const detail = err.response && err.response.data && err.response.data.detail;
         setError(detail || 'Failed to add transaction. Please try again.');

@@ -5,7 +5,7 @@ import {
   TrendingUp, DollarSign, Menu, Bell, Sun, Moon, Monitor,
   Target, PiggyBank, Receipt, BarChart3, Wallet
 } from 'lucide-react';
-import { authAPI, transactionsAPI, analyticsAPI } from './api/client';
+import { authAPI, transactionsAPI, analyticsAPI, updateCachedTransactions, updateCachedDashboard } from './api/client';
 import DashboardCards from './components/DashboardCards';
 import ExpenseCharts from './components/ExpenseCharts';
 import TransactionModal from './components/TransactionModal';
@@ -19,7 +19,7 @@ import BillsView from './components/BillsView';
 import ReportsView from './components/ReportsView';
 import SettingsView from './components/SettingsView';
 import Sidebar, { NAV_ITEMS } from './components/Sidebar';
-import { enqueue, getQueue, removeFromQueue } from './services/offlineSyncService';
+import { enqueue, getQueue, removeFromQueue, isEffectivelyOffline, isManualOffline, setManualOffline } from './services/offlineSyncService';
 import { NotificationProvider, NotificationBell, ToastContainer } from './context/NotificationContext';
 import VerifyEmailView from './components/VerifyEmailView';
 
@@ -894,20 +894,14 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showTransactionModal, setShowTransactionModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [dashboardData, setDashboardData] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mm_cache_dashboard')); } catch { return null; }
-  });
-  const [recommendations, setRecommendations] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mm_cache_recommendations')); } catch { return null; }
-  });
-  const [transactions, setTransactions] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mm_cache_transactions')) || []; } catch { return []; }
-  });
+  const [dashboardData, setDashboardData] = useState(null);
+  const [recommendations, setRecommendations] = useState(null);
+  const [transactions, setTransactions] = useState([]);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
   const [loadingRecs, setLoadingRecs] = useState(false);
   const [notification, setNotification] = useState(null);
-  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [isOnline, setIsOnline] = useState(() => !isEffectivelyOffline());
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
 
   useEffect(() => {
@@ -947,10 +941,7 @@ export default function App() {
     try {
       const res = await analyticsAPI.getDashboard();
       setDashboardData(res.data);
-      localStorage.setItem('mm_cache_dashboard', JSON.stringify(res.data));
-      setIsOnline(true);
     } catch (err) {
-      if (!err.response) setIsOnline(false);
       console.error('Dashboard fetch error:', err);
     } finally {
       setLoadingDashboard(false);
@@ -963,10 +954,7 @@ export default function App() {
     try {
       const res = await transactionsAPI.list({ limit: 200 });
       setTransactions(res.data);
-      localStorage.setItem('mm_cache_transactions', JSON.stringify(res.data));
-      setIsOnline(true);
     } catch (err) {
-      if (!err.response) setIsOnline(false);
       console.error('Transactions fetch error:', err);
     } finally {
       setLoadingTransactions(false);
@@ -979,10 +967,7 @@ export default function App() {
     try {
       const res = await analyticsAPI.getRecommendations();
       setRecommendations(res.data);
-      localStorage.setItem('mm_cache_recommendations', JSON.stringify(res.data));
-      setIsOnline(true);
     } catch (err) {
-      if (!err.response) setIsOnline(false);
       console.error('Recommendations fetch error:', err);
     } finally {
       setLoadingRecs(false);
@@ -1008,9 +993,13 @@ export default function App() {
     for (const entry of queue) {
       try {
         if (entry.op === 'DELETE') {
-          await transactionsAPI.delete(entry.payload.id);
+          if (!String(entry.payload.id).startsWith('local_')) {
+            await transactionsAPI.delete(entry.payload.id);
+          }
         } else if (entry.op === 'UPDATE') {
-          await transactionsAPI.update(entry.payload.id, entry.payload.data);
+          if (!String(entry.payload.id).startsWith('local_')) {
+            await transactionsAPI.update(entry.payload.id, entry.payload.data);
+          }
         } else if (entry.op === 'CREATE') {
           await transactionsAPI.create(entry.payload);
         }
@@ -1031,16 +1020,20 @@ export default function App() {
   }, [fetchDashboard, fetchTransactions, fetchRecommendations]);
 
   useEffect(() => {
-    const goOnline = () => {
-      setIsOnline(true);
-      syncPendingQueue();
+    const handleConnectivity = () => {
+      const onlineNow = !isEffectivelyOffline();
+      setIsOnline(onlineNow);
+      if (onlineNow) {
+        syncPendingQueue();
+      }
     };
-    const goOffline = () => setIsOnline(false);
-    window.addEventListener('online',  goOnline);
-    window.addEventListener('offline', goOffline);
+    window.addEventListener('online', handleConnectivity);
+    window.addEventListener('offline', handleConnectivity);
+    window.addEventListener('mm-connectivity-change', handleConnectivity);
     return () => {
-      window.removeEventListener('online',  goOnline);
-      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', handleConnectivity);
+      window.removeEventListener('offline', handleConnectivity);
+      window.removeEventListener('mm-connectivity-change', handleConnectivity);
     };
   }, [syncPendingQueue]);
 
@@ -1051,9 +1044,6 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
-    localStorage.removeItem('mm_cache_dashboard');
-    localStorage.removeItem('mm_cache_transactions');
-    localStorage.removeItem('mm_cache_recommendations');
     setUser(null);
     setDashboardData(null);
     setTransactions([]);
@@ -1062,13 +1052,22 @@ export default function App() {
 
   const handleDeleteTransaction = async (id) => {
     if (!window.confirm('Delete this transaction?')) return;
-    // Optimistic remove from UI immediately
-    setTransactions(prev => {
-      const updated = prev.filter(t => t.id !== id);
-      localStorage.setItem('mm_cache_transactions', JSON.stringify(updated));
-      return updated;
-    });
-    if (!navigator.onLine) {
+    const targetTx = transactions.find(t => t.id === id);
+    // Optimistic remove from UI and cache immediately
+    setTransactions(prev => prev.filter(t => t.id !== id));
+    updateCachedTransactions(list => list.filter(t => t.id !== id));
+    if (targetTx) {
+      const updatedDash = updateCachedDashboard(targetTx, -1);
+      if (updatedDash) setDashboardData(updatedDash);
+    }
+
+    if (String(id).startsWith('local_')) {
+      removeFromQueue(id);
+      showNotification('Pending offline transaction removed');
+      return;
+    }
+
+    if (isEffectivelyOffline()) {
       enqueue({ op: 'DELETE', payload: { id } });
       showNotification('Offline – Delete queued for sync');
       return;
@@ -1078,41 +1077,17 @@ export default function App() {
       fetchDashboard();
       fetchRecommendations();
       showNotification('Transaction deleted');
-    } catch (err) {
-      setIsOnline(false);
+    } catch {
       enqueue({ op: 'DELETE', payload: { id } });
-      showNotification('Offline – Delete saved locally & queued for sync');
+      showNotification('Offline – Delete queued for cloud sync');
     }
   };
 
-  const handleTransactionSuccess = (offlineTx, wasOffline) => {
-    if (wasOffline && offlineTx) {
-      setIsOnline(false);
-      setTransactions(prev => {
-        const updated = [offlineTx, ...prev];
-        localStorage.setItem('mm_cache_transactions', JSON.stringify(updated));
-        return updated;
-      });
-      setDashboardData(prev => {
-        if (!prev || !prev.current_month) return prev;
-        const deltaIncome = offlineTx.type === 'income' ? Number(offlineTx.amount || 0) : 0;
-        const deltaExpense = offlineTx.type === 'expense' ? Number(offlineTx.amount || 0) : 0;
-        const nextTotalIncome = Number(prev.current_month.total_income || 0) + deltaIncome;
-        const nextTotalExpense = Number(prev.current_month.total_expense || 0) + deltaExpense;
-        const updatedDash = {
-          ...prev,
-          current_month: {
-            ...prev.current_month,
-            total_income: nextTotalIncome,
-            total_expense: nextTotalExpense,
-            net_savings: nextTotalIncome - nextTotalExpense,
-            transaction_count: Number(prev.current_month.transaction_count || 0) + 1,
-          },
-        };
-        localStorage.setItem('mm_cache_dashboard', JSON.stringify(updatedDash));
-        return updatedDash;
-      });
-      showNotification('Offline – Saved locally & queued for sync!');
+  const handleTransactionSuccess = (result) => {
+    if (result && result.offline && result.transaction) {
+      setTransactions(prev => [result.transaction, ...prev]);
+      fetchDashboard();
+      showNotification('Saved offline! Queued for cloud sync.');
       return;
     }
     fetchDashboard();
@@ -1187,14 +1162,27 @@ export default function App() {
                 Synced to cloud
               </span>
             ) : (
-              <span className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-300 ${
-                isOnline
-                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                  : 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-              }`}>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextOffline = !isManualOffline() && isOnline;
+                  setManualOffline(nextOffline);
+                  showNotification(
+                    nextOffline
+                      ? 'Offline Mode active — changes will be saved locally'
+                      : 'Online Mode restored — syncing with cloud...'
+                  );
+                }}
+                title="Click to toggle Online / Offline Mode"
+                className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border cursor-pointer transition-all duration-300 ${
+                  isOnline
+                    ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+                    : 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+                }`}
+              >
                 <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
                 {isOnline ? 'Synced to cloud' : 'Offline – Local storage active'}
-              </span>
+              </button>
             )}
 
             {/* ── Theme Changer (Light / Dark / System) ── */}
@@ -1259,9 +1247,9 @@ export default function App() {
                 currency={user.currency || 'USD'}
               />
               <ExpenseCharts
-                categoryBreakdown={dashboardData?.category_breakdown || []}
-                weeklyTrend={dashboardData?.weekly_trend || []}
-                monthlyIncome={user.monthly_income || dashboardData?.current_month?.total_income || 0}
+                categoryBreakdown={(dashboardData && dashboardData.category_breakdown) || []}
+                weeklyTrend={(dashboardData && dashboardData.weekly_trend) || []}
+                monthlyIncome={user.monthly_income || (dashboardData && dashboardData.current_month && dashboardData.current_month.total_income) || 0}
                 currency={user.currency || 'USD'}
               />
               <AIRecommendations
@@ -1280,7 +1268,8 @@ export default function App() {
               onEdit={async (id, data) => {
                 // Optimistic local update
                 setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
-                if (!navigator.onLine) {
+                updateCachedTransactions(list => list.map(t => t.id === id ? { ...t, ...data } : t));
+                if (isEffectivelyOffline()) {
                   enqueue({ op: 'UPDATE', payload: { id, data } });
                   showNotification('Offline – Edit queued for sync');
                   return;
@@ -1291,24 +1280,34 @@ export default function App() {
                   fetchDashboard();
                   fetchRecommendations();
                   showNotification('Transaction updated!');
-                } catch (err) {
+                } catch {
                   enqueue({ op: 'UPDATE', payload: { id, data } });
-                  showNotification('Network error – will retry when online', 'error');
+                  showNotification('Offline – Edit queued for cloud sync');
                 }
               }}
               onImport={async (payloads) => {
-                if (!navigator.onLine) {
-                  payloads.forEach(item => enqueue({ op: 'CREATE', payload: item }));
-                  setTransactions(prev => [
-                    ...payloads.map((item, idx) => ({ id: `local_${Date.now()}_${idx}`, ...item })),
-                    ...prev,
-                  ]);
+                const queueOfflineImport = () => {
+                  const newItems = payloads.map(item => {
+                    const entry = enqueue({ op: 'CREATE', payload: item });
+                    return { id: entry.localId, ...item, _offlinePending: true };
+                  });
+                  setTransactions(prev => [...newItems, ...prev]);
+                  updateCachedTransactions(list => [...newItems, ...list]);
+                  newItems.forEach(item => updateCachedDashboard(item, 1));
+                  fetchDashboard();
                   showNotification(`Offline – ${payloads.length} transaction(s) queued for sync`);
+                };
+                if (isEffectivelyOffline()) {
+                  queueOfflineImport();
                   return;
                 }
                 try {
                   await transactionsAPI.batchCreate(payloads);
-                } catch {
+                } catch (err) {
+                  if (!err || !err.response || err.isOfflineError) {
+                    queueOfflineImport();
+                    return;
+                  }
                   for (const item of payloads) {
                     await transactionsAPI.create(item);
                   }

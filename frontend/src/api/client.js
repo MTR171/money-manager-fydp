@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { isManualOffline, setBackendReachable } from '../services/offlineSyncService';
 
 // ── Dynamic Backend URL Resolution (Multi-Device LAN, Mobile & Cloud) ─────────
 const resolveApiBaseUrl = () => {
@@ -28,12 +29,9 @@ const resolveApiBaseUrl = () => {
             hostname.endsWith('.local');
 
         if (isLocalOrLan) {
-            // Mobile phone on local Wi-Fi (e.g. http://192.168.x.x:5173 or :3000)
-            // targets the host laptop's backend on port 8000 directly
             return `http://${hostname}:8000`;
         }
 
-        // Production / preview cloud domain fallback
         if (
             import.meta.env.VITE_PROD_API_URL) {
             return import.meta.env.VITE_PROD_API_URL.replace(/\/+$/, '');
@@ -49,55 +47,194 @@ const resolveApiBaseUrl = () => {
 
 export const API_BASE_URL = resolveApiBaseUrl();
 
+const isLocalHostOrLan =
+    typeof window !== 'undefined' &&
+    window.location &&
+    (window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.startsWith('192.168.') ||
+        window.location.hostname.startsWith('10.'));
+
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
     headers: {
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': '1',
     },
-    timeout: 60000,
+    timeout: isLocalHostOrLan ? 6000 : 60000,
 });
 
-// ── Request interceptor: attach JWT Bearer token ──────────────────────────────
+const getCacheKey = (config) => {
+    const url = (config && config.url) || '';
+    let paramsStr = '';
+    if (config && config.params) {
+        try {
+            paramsStr = JSON.stringify(config.params);
+        } catch {
+            paramsStr = '';
+        }
+    }
+    return `mm_http_cache:${url}:${paramsStr}`;
+};
+
+const readCachedResponse = (config) => {
+    try {
+        const raw = localStorage.getItem(getCacheKey(config));
+        if (raw !== null) {
+            return JSON.parse(raw);
+        }
+    } catch {
+        // ignore cache parse errors
+    }
+    return undefined;
+};
+
+const writeCachedResponse = (config, data) => {
+    try {
+        localStorage.setItem(getCacheKey(config), JSON.stringify(data));
+    } catch {
+        // ignore quota errors
+    }
+};
+
+export const updateCachedTransactions = (updater) => {
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('mm_http_cache:/api/transactions/')) {
+                const current = JSON.parse(localStorage.getItem(key) || '[]');
+                if (Array.isArray(current)) {
+                    localStorage.setItem(key, JSON.stringify(updater(current)));
+                }
+            }
+        }
+    } catch {
+        // ignore storage errors
+    }
+};
+
+export const updateCachedDashboard = (tx, direction = 1) => {
+    try {
+        const key = 'mm_http_cache:/api/analytics/dashboard:';
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const dash = JSON.parse(raw);
+        if (!dash || !dash.current_month) return null;
+        const amt = (Number(tx.amount) || 0) * direction;
+        if (tx.type === 'income') {
+            dash.current_month.total_income = Math.max(0, (Number(dash.current_month.total_income) || 0) + amt);
+        } else {
+            dash.current_month.total_expenses = Math.max(0, (Number(dash.current_month.total_expenses) || 0) + amt);
+            if (Array.isArray(dash.category_breakdown)) {
+                const idx = dash.category_breakdown.findIndex(c => c.category === tx.category);
+                if (idx >= 0) {
+                    dash.category_breakdown[idx].amount = Math.max(0, (Number(dash.category_breakdown[idx].amount) || 0) + amt);
+                } else if (amt > 0) {
+                    dash.category_breakdown.push({ category: tx.category, amount: amt, percentage: 0 });
+                }
+            }
+        }
+        dash.current_month.net_balance =
+            (Number(dash.current_month.total_income) || 0) - (Number(dash.current_month.total_expenses) || 0);
+        dash.current_month.transaction_count = Math.max(0, (Number(dash.current_month.transaction_count) || 0) + direction);
+        localStorage.setItem(key, JSON.stringify(dash));
+        return dash;
+    } catch {
+        return null;
+    }
+};
+
+
+// ── Request interceptor: attach JWT Bearer token & handle manual offline mode ─
 apiClient.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('access_token');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+
+        const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        if (browserOffline || isManualOffline()) {
+            const method = (config.method || 'get').toLowerCase();
+            if (method === 'get') {
+                const cached = readCachedResponse(config);
+                if (cached !== undefined) {
+                    config.adapter = async() => ({
+                        data: cached,
+                        status: 200,
+                        statusText: 'OK (Offline Cache)',
+                        headers: {},
+                        config,
+                        _fromOfflineCache: true,
+                    });
+                    return config;
+                }
+            }
+            config.adapter = async() => {
+                const offlineErr = new Error('Offline mode active');
+                offlineErr.config = config;
+                offlineErr.isOfflineError = true;
+                throw offlineErr;
+            };
+        }
         return config;
     },
     (error) => Promise.reject(error),
 );
 
-// ── Response interceptor: LAN Proxy Fallback, Cold-Start Retry & 401 Handling ─
+// ── Response interceptor: Cache GETs, LAN Fallback & Offline Resilience ───────
 apiClient.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        if (!response._fromOfflineCache) {
+            setBackendReachable(true);
+            const method = ((response.config && response.config.method) || 'get').toLowerCase();
+            if (method === 'get' && response.status === 200) {
+                writeCachedResponse(response.config, response.data);
+            }
+        }
+        return response;
+    },
     async(error) => {
         const originalRequest = error.config;
         if (!originalRequest) {
             return Promise.reject(error);
         }
 
-        // 1. Mobile LAN Firewall Fallback: if direct port 8000 is blocked by Windows Firewall,
-        //    transparently route through the current origin's /api proxy (e.g. Vite port 5173/3000)
+        // Detect Vite dev-proxy 500/502/504 when backend server is stopped/unreachable
+        const isProxyDownError =
+            error.response &&
+            (error.response.status === 502 ||
+                error.response.status === 503 ||
+                error.response.status === 504 ||
+                (error.response.status === 500 &&
+                    (!error.response.data || typeof error.response.data === 'string' || !error.response.data.detail)));
+
+        const isNetworkUnreachable = !error.response || error.isOfflineError || isProxyDownError;
+
+        // 1. Mobile LAN Firewall Fallback: only on non-localhost LAN IPs when direct port 8000 is blocked
         if (!error.response &&
+            !error.isOfflineError &&
             !originalRequest._proxyFallback &&
             typeof window !== 'undefined' &&
             window.location &&
+            window.location.hostname !== 'localhost' &&
+            window.location.hostname !== '127.0.0.1' &&
             originalRequest.baseURL &&
             originalRequest.baseURL.includes(':8000') &&
             window.location.port !== '8000'
         ) {
             originalRequest._proxyFallback = true;
             originalRequest.baseURL = window.location.origin;
-            apiClient.defaults.baseURL = window.location.origin;
             return apiClient(originalRequest);
         }
 
-        // 2. Render Cold-Start Handling: প্রথমবার সার্ভার স্লিপে থাকলে আরেকবার অটো-রিট্রাই করবে
+        // 2. Render Cloud Cold-Start Retry (only for cloud URLs when browser is online)
         if (
-            (error.code === 'ECONNABORTED' || (error.message && error.message.includes('timeout')) || !error.response) &&
+            isNetworkUnreachable &&
+            !error.isOfflineError &&
+            !isLocalHostOrLan &&
+            typeof navigator !== 'undefined' &&
+            navigator.onLine !== false &&
             !originalRequest._retry
         ) {
             originalRequest._retry = true;
@@ -105,15 +242,36 @@ apiClient.interceptors.response.use(
             return apiClient(originalRequest);
         }
 
-        // ২. Expired Token Handling: টোকেন নষ্ট বা এক্সপায়ার হলে সেশন রিসেট করা
+        // 3. If backend / network is unreachable: mark app as Offline & serve cached GET data
+        if (isNetworkUnreachable) {
+            setBackendReachable(false);
+            error.isOfflineError = true;
+
+            const method = (originalRequest.method || 'get').toLowerCase();
+            if (method === 'get') {
+                const cached = readCachedResponse(originalRequest);
+                if (cached !== undefined) {
+                    return {
+                        data: cached,
+                        status: 200,
+                        statusText: 'OK (Offline Cache)',
+                        headers: {},
+                        config: originalRequest,
+                        _fromOfflineCache: true,
+                    };
+                }
+            }
+        }
+
+        // 4. Expired Token Handling (only when online and 401 from backend)
         if (error.response && error.response.status === 401) {
-            // লগইন বা রেজিস্ট্রেশন ফর্মে থাকা অবস্থায় পেজ রিডাইরেক্ট আটকানো (যাতে ভুল পাসওয়ার্ড দিলে এরর টেক্সট দেখা যায়)
+            const urlStr = originalRequest.url || '';
             const isAuthUrl =
-                originalRequest.url.includes('/api/auth/login') ||
-                originalRequest.url.includes('/api/auth/register') ||
-                originalRequest.url.includes('/api/auth/forgot-password') ||
-                originalRequest.url.includes('/api/auth/verify-email') ||
-                originalRequest.url.includes('/api/auth/quick-verify');
+                urlStr.includes('/api/auth/login') ||
+                urlStr.includes('/api/auth/register') ||
+                urlStr.includes('/api/auth/forgot-password') ||
+                urlStr.includes('/api/auth/verify-email') ||
+                urlStr.includes('/api/auth/quick-verify');
 
             if (!isAuthUrl) {
                 localStorage.removeItem('access_token');

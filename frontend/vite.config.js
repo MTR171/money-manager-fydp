@@ -158,13 +158,20 @@ export default defineConfig(({ mode }) => {
                             },
                         },
 
-                        // ── JS/CSS chunks: StaleWhileRevalidate ──────────────────────
+                        // ── JS/JSX/CSS & Vite modules: NetworkFirst for offline reload ─
                         {
-                            urlPattern: /\.(?:js|css)$/i,
-                            handler: 'StaleWhileRevalidate',
+                            urlPattern: ({ url }) =>
+                                /\.(?:js|jsx|css)$/i.test(url.pathname) ||
+                                url.pathname.startsWith('/src/') ||
+                                url.pathname.startsWith('/node_modules/') ||
+                                url.pathname.startsWith('/@vite/') ||
+                                url.pathname.startsWith('/@react-refresh'),
+                            handler: 'NetworkFirst',
                             options: {
-                                cacheName: 'static-resources-v1',
-                                expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 7 },
+                                cacheName: 'static-resources-v2',
+                                networkTimeoutSeconds: 3,
+                                expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
+                                cacheableResponse: { statuses: [0, 200] },
                             },
                         },
                     ],

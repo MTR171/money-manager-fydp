@@ -5,7 +5,7 @@ import {
   ShieldCheck, Cloud, X
 } from 'lucide-react';
 import { authAPI, transactionsAPI, budgetsAPI, goalsAPI, billsAPI } from '../api/client';
-import { getQueue, clearQueue } from '../services/offlineSyncService';
+import { getQueue, clearQueue, isEffectivelyOffline, isManualOffline, setManualOffline } from '../services/offlineSyncService';
 import { useNotifications } from '../context/NotificationContext';
 
 const CURRENCY_SYMBOLS = {
@@ -116,6 +116,8 @@ export default function SettingsView({ user, onUpdate, onForceSync, onDataReset 
 
   // ── Offline Sync & Data Management States ─────────────────────────────────
   const [queueCount, setQueueCount] = useState(() => getQueue().length);
+  const [isOnlineState, setIsOnlineState] = useState(() => !isEffectivelyOffline());
+  const [manualOfflineState, setManualOfflineState] = useState(() => isManualOffline());
   const [syncingNow, setSyncingNow] = useState(false);
   const [exportingBackup, setExportingBackup] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
@@ -128,6 +130,24 @@ export default function SettingsView({ user, onUpdate, onForceSync, onDataReset 
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  useEffect(() => {
+    const syncState = () => {
+      setQueueCount(getQueue().length);
+      setIsOnlineState(!isEffectivelyOffline());
+      setManualOfflineState(isManualOffline());
+    };
+    window.addEventListener('mm-sync-queue-change', syncState);
+    window.addEventListener('mm-connectivity-change', syncState);
+    window.addEventListener('online', syncState);
+    window.addEventListener('offline', syncState);
+    return () => {
+      window.removeEventListener('mm-sync-queue-change', syncState);
+      window.removeEventListener('mm-connectivity-change', syncState);
+      window.removeEventListener('online', syncState);
+      window.removeEventListener('offline', syncState);
+    };
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -203,17 +223,46 @@ export default function SettingsView({ user, onUpdate, onForceSync, onDataReset 
     }
   };
 
+  // ── Toggle Offline Mode ───────────────────────────────────────────────────
+  const handleToggleOfflineMode = () => {
+    const nextOffline = !manualOfflineState;
+    setManualOffline(nextOffline);
+    setManualOfflineState(nextOffline);
+    setIsOnlineState(!isEffectivelyOffline());
+    if (nextOffline) {
+      showToast('Offline Mode enabled — changes will be saved locally.');
+    } else {
+      showToast('Online Mode restored — syncing with cloud...');
+      if (onForceSync) {
+        onForceSync();
+      }
+    }
+  };
+
   // ── Force Cloud Sync ──────────────────────────────────────────────────────
   const handleForceCloudSync = async () => {
     setSyncingNow(true);
     try {
+      const pendingBefore = getQueue().length;
+      if (isManualOffline()) {
+        setManualOffline(false);
+        setManualOfflineState(false);
+      }
       if (onForceSync) {
         await onForceSync();
       }
-      setQueueCount(getQueue().length);
-      showToast('Cloud synchronization completed!');
+      const pendingAfter = getQueue().length;
+      setQueueCount(pendingAfter);
+      setIsOnlineState(!isEffectivelyOffline());
+      if (pendingAfter > 0 && isEffectivelyOffline()) {
+        showToast(`Offline — ${pendingAfter} action(s) safely queued locally.`, 'error');
+      } else if (pendingBefore > 0 && pendingAfter === 0) {
+        showToast(`Synced ${pendingBefore} offline action(s) to cloud!`);
+      } else {
+        showToast('Cloud synchronization completed!');
+      }
     } catch {
-      showToast('Unable to sync right now.', 'error');
+      showToast('Server unreachable — data remains safely queued locally.', 'error');
     } finally {
       setSyncingNow(false);
     }
@@ -353,39 +402,82 @@ export default function SettingsView({ user, onUpdate, onForceSync, onDataReset 
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl">
-                  <Cloud size={17} className="text-emerald-600 dark:text-emerald-400" />
+                <div className={`p-2 rounded-xl ${
+                  isOnlineState
+                    ? 'bg-emerald-50 dark:bg-emerald-950/60'
+                    : 'bg-amber-50 dark:bg-amber-950/60'
+                }`}>
+                  <Cloud size={17} className={isOnlineState ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'} />
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-800 dark:text-slate-100 text-sm">Offline Sync Status</h3>
                   <p className="text-[11px] text-gray-400 dark:text-slate-400">Local cache &amp; cloud queue</p>
                 </div>
               </div>
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
-                navigator.onLine
-                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                  : 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+              <button
+                type="button"
+                onClick={handleToggleOfflineMode}
+                title="Click to toggle Offline / Online mode"
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border cursor-pointer transition-all ${
+                  isOnlineState
+                    ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100'
+                    : 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100'
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${isOnlineState ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                {isOnlineState ? 'Online' : 'Offline'}
+              </button>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl p-3 border border-slate-100 dark:border-slate-700 mb-2.5 flex items-center justify-between">
+              <span className="text-xs text-gray-500 dark:text-slate-400">Offline Queue:</span>
+              <span className={`text-xs font-bold ${
+                queueCount > 0
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-gray-800 dark:text-slate-100'
               }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${navigator.onLine ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                {navigator.onLine ? 'Online' : 'Offline'}
+                {queueCount} pending action{queueCount === 1 ? '' : 's'}
               </span>
             </div>
 
-            <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl p-3 border border-slate-100 dark:border-slate-700 mb-3 flex items-center justify-between">
-              <span className="text-xs text-gray-500 dark:text-slate-400">Offline Queue:</span>
-              <span className="text-xs font-bold text-gray-800 dark:text-slate-100">
-                {queueCount} pending action{queueCount === 1 ? '' : 's'}
-              </span>
+            <div className="bg-slate-50 dark:bg-slate-900/60 rounded-xl px-3 py-2.5 border border-slate-100 dark:border-slate-700 mb-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-gray-700 dark:text-slate-200">Work Offline Mode</p>
+                <p className="text-[10px] text-gray-400 dark:text-slate-400">Queue changes locally without internet</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!isOnlineState}
+                onClick={handleToggleOfflineMode}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  !isOnlineState ? 'bg-amber-500' : 'bg-gray-200 dark:bg-slate-600'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    !isOnlineState ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
             </div>
 
             <button
               type="button"
               onClick={handleForceCloudSync}
-              disabled={syncingNow || !navigator.onLine}
-              className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-slate-100 dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-200 hover:text-blue-600 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
+              disabled={syncingNow}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 ${
+                queueCount > 0
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+                  : 'bg-slate-100 dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-200 hover:text-blue-600'
+              }`}
             >
-              <RefreshCw size={13} className={syncingNow ? 'animate-spin text-blue-600' : ''} />
-              {syncingNow ? 'Syncing with Cloud…' : 'Force Cloud Sync'}
+              <RefreshCw size={13} className={syncingNow ? 'animate-spin' : ''} />
+              {syncingNow
+                ? 'Syncing with Cloud…'
+                : queueCount > 0
+                  ? `Force Cloud Sync (${queueCount} pending)`
+                  : 'Force Cloud Sync'}
             </button>
           </div>
         </div>
