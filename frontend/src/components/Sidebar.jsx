@@ -163,7 +163,7 @@ export default function Sidebar({
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
               </span>
-              <span>v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.2.2'}</span>
+              <span>v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.2.3'}</span>
               <span className="text-gray-300 dark:text-slate-600">•</span>
               <span className="text-emerald-600 dark:text-emerald-400 font-medium font-sans">Stable</span>
             </div>

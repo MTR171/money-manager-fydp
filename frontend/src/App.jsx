@@ -20,6 +20,7 @@ import ReportsView from './components/ReportsView';
 import SettingsView from './components/SettingsView';
 import Sidebar, { NAV_ITEMS } from './components/Sidebar';
 import { enqueue, getQueue, removeFromQueue } from './services/offlineSyncService';
+import { NotificationProvider, NotificationBell, ToastContainer } from './context/NotificationContext';
 import VerifyEmailView from './components/VerifyEmailView';
 
 // ── Password Validation Utilities ──────────────────────────────────────────────
@@ -1086,6 +1087,15 @@ export default function App() {
   const navItems = NAV_ITEMS;
 
   return (
+    <NotificationProvider
+      user={user}
+      dashboardData={dashboardData}
+      recommendations={recommendations}
+      transactions={transactions}
+      isOnline={isOnline}
+      syncStatus={syncStatus}
+      onNavigate={setActiveView}
+    >
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 flex transition-colors duration-200">
       {/* Sidebar Component */}
       <Sidebar
@@ -1160,6 +1170,9 @@ export default function App() {
                 </button>
               ))}
             </div>
+
+            {/* ── Smart Notification Center (Bell Dropdown) ── */}
+            <NotificationBell />
 
             <button
               onClick={() => { fetchDashboard(); fetchTransactions(); fetchRecommendations(); }}
@@ -1344,6 +1357,8 @@ export default function App() {
           Add Transaction
         </span>
       </div>
+      <ToastContainer />
     </div>
+    </NotificationProvider>
   );
 }
