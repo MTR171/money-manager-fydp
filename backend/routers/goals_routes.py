@@ -4,8 +4,8 @@ from typing import Any, List
 from datetime import datetime
 from database import get_db
 from schemas import GoalCreate, GoalDeposit, GoalUpdate, GoalOut
-from models import Goal, Transaction
-from auth import get_current_user, User
+from auth import get_current_user
+from models import User, Goal, Transaction
 
 router = APIRouter(prefix='/api/goals', tags=['Goals'])
 

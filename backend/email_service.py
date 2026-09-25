@@ -24,7 +24,7 @@ def get_verification_url(token: str) -> str:
     return f"{base}/verify-email?token={token}"
 
 
-def send_verification_email(to_email: str, token: str, full_name: str = "User") -> Tuple[bool, str]:
+def send_verification_email(to_email: str, token: str, full_name: str = "User", subject: str = "Verify your Money Manager Account") -> Tuple[bool, str]:
     """
     Send account verification email via SMTP.
     If SMTP credentials are not configured or sending fails, prints a clear,
@@ -44,7 +44,7 @@ def send_verification_email(to_email: str, token: str, full_name: str = "User") 
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Verify your Money Manager Account"
+        msg["Subject"] = subject
         msg["From"] = SMTP_FROM
         msg["To"] = to_email
 

@@ -239,6 +239,11 @@ const AuthPage = ({ onLogin }) => {
   const [unverifiedEmail, setUnverifiedEmail]     = useState(null);
   const [resending, setResending]                 = useState(false);
   const [resendStatus, setResendStatus]           = useState('');
+  const [otpValue, setOtpValue]                   = useState('');
+  const [otpLoading, setOtpLoading]               = useState(false);
+  const [otpError, setOtpError]                   = useState('');
+  const [otpSuccess, setOtpSuccess]               = useState(false);
+
 
   const handleChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -352,67 +357,100 @@ const AuthPage = ({ onLogin }) => {
           {/* If registered successfully, show Verify Notice */}
           {registeredSuccess ? (
             <div className="text-center py-4 space-y-4">
-              <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto shadow-inner text-3xl">
-                ✉️
-              </div>
-              <h2 className="text-2xl font-bold text-gray-800">Check Your Email</h2>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                We've sent an activation link to <br />
-                <span className="font-semibold text-gray-900 bg-gray-100 px-2.5 py-1 rounded-lg text-xs mt-1 inline-block">
-                  {registeredSuccess.email}
-                </span>
-              </p>
-              <p className="text-xs text-gray-500">
-                Click the verification link in your email to activate your account and start managing your finances.
-              </p>
-
-              {/* Instant Verification Shortcut for Dev / Local Testing */}
-              {registeredSuccess.verification_link && (
-                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-left space-y-1 shadow-sm">
-                  <p className="text-xs font-bold text-amber-800 flex items-center gap-1">
-                    <span>⚡ Testing / Dev Instant Link:</span>
-                  </p>
-                  <p className="text-[11px] text-amber-700">
-                    Skip email wait and click directly to activate your account:
-                  </p>
-                  <a
-                    href={registeredSuccess.verification_link}
-                    className="inline-block text-xs font-semibold text-blue-600 hover:text-blue-800 underline break-all mt-1"
+              {otpSuccess ? (
+                <>
+                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto text-3xl">✅</div>
+                  <h2 className="text-2xl font-bold text-gray-800">Email Verified!</h2>
+                  <p className="text-sm text-gray-600">Your account is now active. Redirecting to sign in...</p>
+                  <button
+                    type="button"
+                    onClick={() => { setRegisteredSuccess(null); setOtpValue(''); setOtpSuccess(false); setMode('login'); setError(''); }}
+                    className="w-full py-3 rounded-xl font-bold text-white bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 transition-all text-sm shadow-md"
                   >
-                    Click here to verify now &rarr;
-                  </a>
-                </div>
+                    Go to Sign In
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto shadow-inner text-3xl">✉️</div>
+                  <h2 className="text-2xl font-bold text-gray-800">Verify Your Email</h2>
+                  <p className="text-sm text-gray-600 leading-relaxed">
+                    We sent a <strong>6-digit OTP</strong> to<br />
+                    <span className="font-semibold text-gray-900 bg-gray-100 px-2.5 py-1 rounded-lg text-xs mt-1 inline-block">
+                      {registeredSuccess.email}
+                    </span>
+                  </p>
+                  <p className="text-xs text-gray-500">Enter the code from your email below to activate your account.</p>
+
+                  <div className="space-y-3 text-left">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      placeholder="Enter 6-digit OTP"
+                      value={otpValue}
+                      onChange={e => { setOtpValue(e.target.value.replace(/\D/g, '').slice(0, 6)); setOtpError(''); }}
+                      className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-center text-2xl font-bold tracking-widest focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
+                    />
+
+                    {otpError && (
+                      <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs text-center">{otpError}</div>
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={otpLoading || otpValue.length !== 6}
+                      onClick={async () => {
+                        if (otpValue.length !== 6) return;
+                        setOtpLoading(true);
+                        setOtpError('');
+                        try {
+                          await authAPI.verifyOtp(otpValue);
+                          setOtpSuccess(true);
+                          setTimeout(() => {
+                            setRegisteredSuccess(null);
+                            setOtpValue('');
+                            setOtpSuccess(false);
+                            setMode('login');
+                            setError('');
+                          }, 2000);
+                        } catch (err) {
+                          setOtpError(err.response && err.response.data && err.response.data.detail ? err.response.data.detail : 'Invalid or expired OTP. Please try again.');
+                        } finally {
+                          setOtpLoading(false);
+                        }
+                      }}
+                      className={`w-full py-3 rounded-xl font-bold text-white transition-all text-sm shadow-md ${otpValue.length === 6 && !otpLoading ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700' : 'bg-gray-300 cursor-not-allowed'}`}
+                    >
+                      {otpLoading ? 'Verifying…' : 'Verify OTP'}
+                    </button>
+                  </div>
+
+                  {resendStatus && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-xs">{resendStatus}</div>
+                  )}
+
+                  <div className="pt-1 space-y-2">
+                    <button
+                      type="button"
+                      onClick={handleResendFromAuth}
+                      disabled={resending}
+                      className="w-full py-2.5 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                    >
+                      {resending ? 'Sending new OTP…' : "Didn't receive the code? Resend OTP"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setRegisteredSuccess(null); setOtpValue(''); setOtpError(''); setMode('login'); setError(''); }}
+                      className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      Back to Sign In
+                    </button>
+                  </div>
+                </>
               )}
-
-              {resendStatus && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-800 text-xs">
-                  {resendStatus}
-                </div>
-              )}
-
-              <div className="pt-3 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRegisteredSuccess(null);
-                    setMode('login');
-                    setError('');
-                  }}
-                  className="w-full py-3 rounded-xl font-bold text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all text-sm shadow-md"
-                >
-                  Proceed to Sign In
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleResendFromAuth}
-                  disabled={resending}
-                  className="w-full py-2.5 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
-                >
-                  {resending ? 'Sending verification link…' : "Didn't receive email? Resend"}
-                </button>
-              </div>
             </div>
+
           ) : (
             <>
               {/* Tab Toggle */}

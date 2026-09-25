@@ -4,8 +4,8 @@ from typing import List
 from datetime import datetime
 from database import get_db
 from schemas import BillCreate, BillUpdate, BillOut
-from models import Bill, Transaction
-from auth import get_current_user, User
+from auth import get_current_user
+from models import User, Bill, Transaction
 
 router = APIRouter(prefix='/api/bills', tags=['Bills'])
 

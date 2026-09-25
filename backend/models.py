@@ -17,6 +17,8 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     verification_token = Column(String, nullable=True, index=True)
+    otp_code = Column(String, nullable=True)
+    otp_expiry = Column(DateTime, nullable=True)
 
     transactions = relationship("Transaction", back_populates="user")
     budgets = relationship("Budget", back_populates="user")
