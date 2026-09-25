@@ -5,6 +5,8 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, timedelta
+from backend.models import User
+from backend.database import get_db
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
