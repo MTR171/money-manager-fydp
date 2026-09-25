@@ -14,7 +14,8 @@ from routers import auth_routes, transaction_routes, analytics_routes, goals_rou
 Base.metadata.create_all(bind=engine)
 
 PRIMARY_DEMO_EMAIL = "rifat2305101290@diu.edu.bd"
-PRIMARY_DEMO_HASH = "$2b$12$09frS.Kl17YzQbtVVkv.zOiG0iAtgCAMqYQuBJsuYq7uwixSxQTcy"
+# bcrypt hash of "Rifat@2026" — updated to ensure Render DB always has correct credentials
+PRIMARY_DEMO_HASH = "$2b$12$gQvv29LH.aIYCXQc193/l.xJ5Au2b34z5inuB05x3XbyZ6T500Wg6"
 
 SEED_TRANSACTIONS = [
     {"amount": 15000.0, "type": "income",  "category": "Other",         "date": datetime(2026, 9, 3), "note": "Monthly salary / allowance"},
@@ -89,13 +90,16 @@ def ensure_database_schema():
             db.refresh(demo_user)
             print(f"[Database] Provisioned primary user account: {PRIMARY_DEMO_EMAIL}")
         else:
-            if not demo_user.is_verified or not demo_user.is_active:
-                demo_user.is_verified = True
-                demo_user.is_active = True
-                demo_user.verification_token = None
-                demo_user.otp_code = None
-                demo_user.otp_expiry = None
-                db.commit()
+            # Always sync demo user credentials on restart (fixes Render DB password mismatch)
+            demo_user.hashed_password = PRIMARY_DEMO_HASH
+            demo_user.is_verified = True
+            demo_user.is_active = True
+            demo_user.verification_token = None
+            demo_user.otp_code = None
+            demo_user.otp_expiry = None
+            db.commit()
+            print(f"[Database] Demo user credentials refreshed: {PRIMARY_DEMO_EMAIL}")
+
 
         # Seed initial transactions for demo_user if they have none
         tx_count = db.query(Transaction).filter(Transaction.user_id == demo_user.id).count()
