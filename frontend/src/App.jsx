@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   LogIn, UserPlus, LogOut, Plus, Settings, LayoutDashboard,
-  List, RefreshCw, Search, X, Save, Pencil, Download, Upload,
+  List, RefreshCw, Search, X, Save, Pencil, Download, Upload, Trash2,
   TrendingUp, DollarSign, Menu, Bell, Sun, Moon, Monitor,
   Target, PiggyBank, Receipt, BarChart3, Wallet
 } from 'lucide-react';
@@ -1063,6 +1063,19 @@ export default function App() {
     }
   }, []);
 
+  const fetchRecommendations = useCallback(async () => {
+    if (!user) return;
+    setLoadingRecs(true);
+    try {
+      const res = await analyticsAPI.getRecommendations();
+      setRecommendations(res.data);
+    } catch (err) {
+      console.error('Recommendations fetch error:', err);
+    } finally {
+      setLoadingRecs(false);
+    }
+  }, [user]);
+
   const fetchTransactions = useCallback(async (markAuthoritative = false) => {
     if (!user) return;
     setLoadingTransactions(true);
@@ -1111,21 +1124,7 @@ export default function App() {
     } finally {
       setLoadingTransactions(false);
     }
-  }, [user, saveAuthoritativeLedger, fetchDashboard]);
-
-
-  const fetchRecommendations = useCallback(async () => {
-    if (!user) return;
-    setLoadingRecs(true);
-    try {
-      const res = await analyticsAPI.getRecommendations();
-      setRecommendations(res.data);
-    } catch (err) {
-      console.error('Recommendations fetch error:', err);
-    } finally {
-      setLoadingRecs(false);
-    }
-  }, [user]);
+  }, [user, saveAuthoritativeLedger, fetchDashboard, fetchRecommendations]);
 
   useEffect(() => {
     if (user) {
