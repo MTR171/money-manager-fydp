@@ -67,35 +67,45 @@ function normalizeCategory(raw) {
 function validateRow(raw, index) {
   const errors = [];
 
-  // 1. Validate Date
-  const rawDate = raw.date ?? raw.Date ?? '';
+  // 1. Validate Date (preserve exact calendar date at 12:00 UTC to prevent timezone day shift)
+  const rawDate = (raw.date !== undefined && raw.date !== null) ? raw.date : ((raw.Date !== undefined && raw.Date !== null) ? raw.Date : '');
   const parsedDate = rawDate ? new Date(rawDate) : new Date(NaN);
   const validDate = !isNaN(parsedDate.getTime());
   if (!validDate) errors.push('Invalid date');
 
+  let dateISO = null;
+  if (validDate) {
+    const y = parsedDate.getFullYear();
+    const m = String(parsedDate.getMonth() + 1).padStart(2, '0');
+    const d = String(parsedDate.getDate()).padStart(2, '0');
+    dateISO = `${y}-${m}-${d}T12:00:00.000Z`;
+  }
+
   // 2. Validate Category
-  const rawCategory = raw.category ?? raw.Category ?? '';
+  const rawCategory = (raw.category !== undefined && raw.category !== null) ? raw.category : ((raw.Category !== undefined && raw.Category !== null) ? raw.Category : '');
   const normalizedCat = normalizeCategory(rawCategory);
   if (!normalizedCat) errors.push(`Unrecognized category "${rawCategory || 'empty'}"`);
 
   // 3. Validate Type
-  const rawType = String(raw.type ?? raw.Type ?? '').trim().toLowerCase();
+  const rawTypeVal = (raw.type !== undefined && raw.type !== null) ? raw.type : ((raw.Type !== undefined && raw.Type !== null) ? raw.Type : '');
+  const rawType = String(rawTypeVal).trim().toLowerCase();
   const validType = rawType === 'income' || rawType === 'expense';
   if (!validType) errors.push('Type must be income or expense');
 
   // 4. Validate Amount
-  const rawAmount = raw.amount ?? raw.Amount ?? '';
+  const rawAmount = (raw.amount !== undefined && raw.amount !== null) ? raw.amount : ((raw.Amount !== undefined && raw.Amount !== null) ? raw.Amount : '');
   const numAmount = parseFloat(String(rawAmount).replace(/[^0-9.-]/g, ''));
   const validAmount = !isNaN(numAmount) && numAmount > 0;
   if (!validAmount) errors.push('Amount must be > 0');
 
   // 5. Note
-  const note = String(raw.note ?? raw.Note ?? raw.description ?? '').trim();
+  const rawNote = (raw.note !== undefined && raw.note !== null) ? raw.note : ((raw.Note !== undefined && raw.Note !== null) ? raw.Note : (raw.description || ''));
+  const note = String(rawNote).trim();
 
   return {
     rowNum: index + 1,
     rawDate: String(rawDate),
-    dateISO: validDate ? parsedDate.toISOString() : null,
+    dateISO,
     category: normalizedCat || String(rawCategory || '—'),
     type: validType ? rawType : String(rawType || '—'),
     amount: validAmount ? numAmount : rawAmount,
@@ -145,7 +155,7 @@ export default function ImportTransactionsModal({ isOpen, onClose, onCommit, cur
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const text = String(e.target?.result || '').trim();
+        const text = String((e.target && e.target.result) || '').trim();
         if (!text) {
           setParseError('The selected file is empty.');
           return;
@@ -180,7 +190,7 @@ export default function ImportTransactionsModal({ isOpen, onClose, onCommit, cur
             const cols = parseCSVLine(line);
             const obj = {};
             headers.forEach((h, i) => {
-              obj[h] = cols[i] ?? '';
+              obj[h] = (cols[i] !== undefined && cols[i] !== null) ? cols[i] : '';
             });
             return validateRow(obj, idx);
           });
@@ -274,7 +284,7 @@ export default function ImportTransactionsModal({ isOpen, onClose, onCommit, cur
                   type="file"
                   accept=".csv,.json,text/csv,application/json"
                   className="hidden"
-                  onChange={e => handleFileChange(e.target.files?.[0])}
+                  onChange={e => handleFileChange(e.target.files && e.target.files[0])}
                 />
               </label>
             </div>

@@ -1044,18 +1044,75 @@ export default function App() {
     }
   }, [user]);
 
-  const fetchTransactions = useCallback(async () => {
+  const saveAuthoritativeLedger = useCallback((list) => {
+    try {
+      const cleanItems = (list || []).map(t => ({
+        amount: Number(t.amount),
+        type: t.type,
+        category: t.category,
+        date: t.date,
+        note: t.note || null,
+      }));
+      localStorage.setItem('mm_authoritative_ledger_v1', JSON.stringify({
+        active: true,
+        updatedAt: Date.now(),
+        items: cleanItems,
+      }));
+    } catch {
+      // ignore storage quota errors
+    }
+  }, []);
+
+  const fetchTransactions = useCallback(async (markAuthoritative = false) => {
     if (!user) return;
     setLoadingTransactions(true);
     try {
-      const res = await transactionsAPI.list({ limit: 200 });
-      setTransactions(res.data);
+      const res = await transactionsAPI.list({ limit: 500 });
+      const serverList = Array.isArray(res.data) ? res.data : [];
+
+      if (markAuthoritative) {
+        saveAuthoritativeLedger(serverList);
+        setTransactions(serverList);
+        return;
+      }
+
+      // Check if user has an authoritative ledger (from Clear All / Import / edits)
+      // and the cloud container reset to default seed on redeploy
+      let savedLedger = null;
+      try {
+        savedLedger = JSON.parse(localStorage.getItem('mm_authoritative_ledger_v1') || 'null');
+      } catch {
+        savedLedger = null;
+      }
+
+      const isDefaultSeedCount = serverList.length === 68 || serverList.length === 15;
+      if (
+        savedLedger &&
+        savedLedger.active &&
+        Array.isArray(savedLedger.items) &&
+        serverList.length !== savedLedger.items.length &&
+        isDefaultSeedCount &&
+        !isEffectivelyOffline()
+      ) {
+        await transactionsAPI.deleteAll();
+        if (savedLedger.items.length > 0) {
+          await transactionsAPI.batchCreate(savedLedger.items);
+        }
+        const refreshed = await transactionsAPI.list({ limit: 500 });
+        setTransactions(Array.isArray(refreshed.data) ? refreshed.data : []);
+        fetchDashboard();
+        fetchRecommendations();
+        return;
+      }
+
+      setTransactions(serverList);
     } catch (err) {
       console.error('Transactions fetch error:', err);
     } finally {
       setLoadingTransactions(false);
     }
-  }, [user]);
+  }, [user, saveAuthoritativeLedger, fetchDashboard]);
+
 
   const fetchRecommendations = useCallback(async () => {
     if (!user) return;
@@ -1149,8 +1206,10 @@ export default function App() {
   const handleDeleteTransaction = async (id) => {
     if (!window.confirm('Delete this transaction?')) return;
     const targetTx = transactions.find(t => t.id === id);
+    const updatedList = transactions.filter(t => t.id !== id);
     // Optimistic remove from UI and cache immediately
-    setTransactions(prev => prev.filter(t => t.id !== id));
+    setTransactions(updatedList);
+    saveAuthoritativeLedger(updatedList);
     updateCachedTransactions(list => list.filter(t => t.id !== id));
     if (targetTx) {
       const updatedDash = updateCachedDashboard(targetTx, -1);
@@ -1183,6 +1242,7 @@ export default function App() {
     try {
       await transactionsAPI.deleteAll();
       setTransactions([]);
+      saveAuthoritativeLedger([]);
       localStorage.removeItem('mm_transactions_cache');
       fetchDashboard();
       fetchRecommendations();
@@ -1193,15 +1253,18 @@ export default function App() {
   };
 
   const handleTransactionSuccess = (result) => {
-
     if (result && result.offline && result.transaction) {
-      setTransactions(prev => [result.transaction, ...prev]);
+      setTransactions(prev => {
+        const next = [result.transaction, ...prev];
+        saveAuthoritativeLedger(next);
+        return next;
+      });
       fetchDashboard();
       showNotification('Saved offline! Queued for cloud sync.');
       return;
     }
     fetchDashboard();
-    fetchTransactions();
+    fetchTransactions(true);
     fetchRecommendations();
     showNotification('Transaction added successfully!');
   };
@@ -1377,7 +1440,11 @@ export default function App() {
               onDelete={handleDeleteTransaction}
               onEdit={async (id, data) => {
                 // Optimistic local update
-                setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
+                setTransactions(prev => {
+                  const next = prev.map(t => t.id === id ? { ...t, ...data } : t);
+                  saveAuthoritativeLedger(next);
+                  return next;
+                });
                 updateCachedTransactions(list => list.map(t => t.id === id ? { ...t, ...data } : t));
                 if (isEffectivelyOffline()) {
                   enqueue({ op: 'UPDATE', payload: { id, data } });
@@ -1386,7 +1453,7 @@ export default function App() {
                 }
                 try {
                   await transactionsAPI.update(id, data);
-                  fetchTransactions();
+                  fetchTransactions(true);
                   fetchDashboard();
                   fetchRecommendations();
                   showNotification('Transaction updated!');
@@ -1401,7 +1468,11 @@ export default function App() {
                     const entry = enqueue({ op: 'CREATE', payload: item });
                     return { id: entry.localId, ...item, _offlinePending: true };
                   });
-                  setTransactions(prev => [...newItems, ...prev]);
+                  setTransactions(prev => {
+                    const next = [...newItems, ...prev];
+                    saveAuthoritativeLedger(next);
+                    return next;
+                  });
                   updateCachedTransactions(list => [...newItems, ...list]);
                   newItems.forEach(item => updateCachedDashboard(item, 1));
                   fetchDashboard();
@@ -1422,7 +1493,7 @@ export default function App() {
                     await transactionsAPI.create(item);
                   }
                 }
-                fetchTransactions();
+                fetchTransactions(true);
                 fetchDashboard();
                 fetchRecommendations();
                 showNotification(`Imported ${payloads.length} transaction${payloads.length === 1 ? '' : 's'} successfully!`);
@@ -1441,13 +1512,13 @@ export default function App() {
               currency={user.currency || 'BDT'}
               onGoalDeposit={() => {
                 fetchDashboard();
-                fetchTransactions();
+                fetchTransactions(true);
                 fetchRecommendations();
                 showNotification('Goal funded! Deducted from Net Balance.');
               }}
               onSync={() => {
                 fetchDashboard();
-                fetchTransactions();
+                fetchTransactions(true);
                 fetchRecommendations();
               }}
             />
@@ -1458,13 +1529,13 @@ export default function App() {
               currency={user.currency || 'BDT'}
               onBillPaid={() => {
                 fetchDashboard();
-                fetchTransactions();
+                fetchTransactions(true);
                 fetchRecommendations();
                 showNotification('Bill status updated! Net Balance & expenses synchronized.');
               }}
               onSync={() => {
                 fetchDashboard();
-                fetchTransactions();
+                fetchTransactions(true);
                 fetchRecommendations();
               }}
             />
@@ -1480,10 +1551,12 @@ export default function App() {
               onUpdate={(updated) => { setUser(updated); fetchDashboard(); fetchRecommendations(); }}
               onForceSync={async () => {
                 await syncPendingQueue();
-                await Promise.all([fetchDashboard(), fetchTransactions(), fetchRecommendations()]);
+                await Promise.all([fetchDashboard(), fetchTransactions(true), fetchRecommendations()]);
               }}
               onDataReset={() => {
                 setTransactions([]);
+                saveAuthoritativeLedger([]);
+                localStorage.removeItem('mm_transactions_cache');
                 fetchDashboard();
                 fetchTransactions();
                 fetchRecommendations();
