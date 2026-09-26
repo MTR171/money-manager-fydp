@@ -305,6 +305,7 @@ export const transactionsAPI = {
     get: (id) => apiClient.get(`/api/transactions/${id}`),
     update: (id, data) => apiClient.put(`/api/transactions/${id}`, data),
     delete: (id) => apiClient.delete(`/api/transactions/${id}`),
+    deleteAll: () => apiClient.delete('/api/transactions/all'),
     monthlySummary: (year, month) => apiClient.get('/api/transactions/summary/monthly', { params: { year, month } }),
     categoryBreakdown: (year, month) => apiClient.get('/api/transactions/summary/category-breakdown', { params: { year, month } }),
     weeklySummary: (week_start) => apiClient.get('/api/transactions/summary/weekly', { params: { week_start } }),
